@@ -68,6 +68,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -211,10 +212,10 @@ internal fun AgentChatBody(
     val imeBottomPx = WindowInsets.ime.getBottom(density)
     val isKeyboardVisible = imeBottomPx > 0
     val browserSnapshot = LocalAgentBrowserSession.current?.snapshots?.collectAsState()?.value
+        ?: BrowserSessionSnapshot()
     // K 线面板展开状态：只在这里读一次，往下用参数传，避免 Scaffold 与输入框一起重建。
     val stockPanelExpanded = io.github.mangi.eta.ui.stock.StockChartUiState.expanded
     val stockPanelCollapsed = io.github.mangi.eta.ui.stock.StockChartUiState.collapsed
-        ?: BrowserSessionSnapshot()
     val contextUsage = remember(messages, modelPickerState.selectedModel) {
         latestContextUsage(messages, modelPickerState.selectedModel)
     }
