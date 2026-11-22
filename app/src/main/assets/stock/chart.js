@@ -342,7 +342,23 @@
       return Math.sqrt(dx * dx + dy * dy);
     }
 
-    /** 十字光标当前画在哪一列（px，相对画布左沿） */
+    /**
+   * 通用按帧节流重绘。
+   *
+   * 手势每动一下就是几十个 touchmove，直接 render() 会在 WebView 的软件渲染下
+   * 把主线程塞满 —— 表现就是横向拖动、双指缩放、十字光标移动都「拖不动」。
+   * 这里把同一帧内的多次重绘合并成一次。
+   */
+  var renderRaf = 0;
+  function scheduleRender() {
+    if (renderRaf) return;
+    renderRaf = (global.requestAnimationFrame || function (fn) { return setTimeout(fn, 16); })(function () {
+      renderRaf = 0;
+      self.render();
+    });
+  }
+
+  /** 十字光标当前画在哪一列（px，相对画布左沿） */
     function crossX() {
       if (self.crossIdx < 0) return -1;
       var plotW = self.w - self.padL - self.padR;
@@ -428,7 +444,7 @@
           if (nv !== self.visible) {
             self.visible = nv;
             self.start = Math.max(0, Math.min(self.kl.length - nv, self.start));
-            self.render();
+            scheduleRender();
           }
         }
         e.preventDefault();
@@ -478,7 +494,7 @@
         var shift = Math.round((startX - p.x) / bw);
         self.start = Math.max(0, Math.min(n - self.visible, startStart + shift));
         self.crossIdx = -1;
-        self.render();
+        scheduleRender();
 
       } else if (axis === 'y') {
         // ---- 纵向：缩放 ----
@@ -500,9 +516,9 @@
           if (self._hintTimer) clearTimeout(self._hintTimer);
           self._hintTimer = setTimeout(function () {
             self.gestureHint = null;
-            self.render();
+            scheduleRender();
           }, 1200);
-          self.render();
+          scheduleRender();
         }
       }
       if (e.cancelable) e.preventDefault();

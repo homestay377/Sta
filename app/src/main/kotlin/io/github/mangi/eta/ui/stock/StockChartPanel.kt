@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color as AndroidColor
 import android.util.Log
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
@@ -313,6 +314,9 @@ private fun StockChartWebView(modifier: Modifier = Modifier) {
                 settings.loadWithOverviewMode = true
                 settings.useWideViewPort = true
                 settings.textZoom = 100
+                // Canvas 绘制交给 GPU：手势期间每帧都要全量重绘 100 根 K 线 + 指标，
+                // 软件渲染撑不住 60fps，表现就是拖动/缩放「拖不动」。
+                setLayerType(View.LAYER_TYPE_HARDWARE, null)
                 webViewClient = WebViewClient()
                 webChromeClient = object : WebChromeClient() {
                     override fun onJsPrompt(
