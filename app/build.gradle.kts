@@ -72,7 +72,8 @@ android {
         }
         release {
             versionNameSuffix = buildMetadataSuffix
-            signingConfig = signingConfigs.findByName("release")
+            // 没配正式证书时回退 debug 证书：否则 release 包无签名，装不上。
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

@@ -20,9 +20,9 @@ concurrency:
 
 jobs:
   build:
-    name: 构建 Release APK
+    name: 构建 Release + Debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: 检出代码
@@ -31,43 +31,49 @@ jobs:
       - name: 配置构建环境
         uses: ./.github/actions/setup-build
 
-      - name: 构建 Debug APK
-        # 出 debug 包：不做 R8 混淆，编译快，装到手机上功能完全一样，
-        # 用来快速验证 K 线 / 缠论 / 工具是否正常。Release 走 android-release.yml。
+      - name: 构建 Release 与 Debug APK
+        # 不做签名配置：Gradle 里 release 的 signingConfig 会回退到 debug 证书，
+        # 没配正式 Secrets 时也能直接覆盖安装。
         run: |
           ./gradlew --no-daemon --no-configuration-cache \
             -Peta.buildMetadata=${GITHUB_SHA::7} \
-            :app:assembleDebug
+            :app:assembleRelease :app:assembleDebug
 
       - name: 整理并校验 APK
         id: apk
         run: |
           shopt -s nullglob
-          apks=(app/build/outputs/apk/debug/*.apk)
-          if [[ ${#apks[@]} -ne 1 ]]; then
-            echo "::error::Debug APK 数量异常（${#apks[@]}）"
-            ls -la app/build/outputs/apk/debug/ || true
+          release_apks=(app/build/outputs/apk/release/Sta-v*.apk)
+          debug_apks=(app/build/outputs/apk/debug/Sta-v*.apk)
+
+          echo "Release 包数量: ${#release_apks[@]}"
+          echo "Debug 包数量: ${#debug_apks[@]}"
+
+          if [[ ${#release_apks[@]} -eq 0 ]]; then
+            echo "::error::没有生成 Release APK"
+            ls -la app/build/outputs/apk/release/ || true
             exit 1
           fi
-          apk="${apks[0]}"
-          name="$(basename "$apk")"
-          echo "=== $name ==="
-          ls -la "$apk"
-          md5sum "$apk" || true
-          sha256sum "$apk" || true
 
           apksigner_path="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          "$apksigner_path" verify --min-sdk-version 34 "$apk" \
-            && echo "签名校验通过"
+          mkdir -p out
 
-          echo "path=$apk" >> "$GITHUB_OUTPUT"
-          echo "name=$name" >> "$GITHUB_OUTPUT"
+          for apk in "${release_apks[@]}" "${debug_apks[@]}"; do
+            name="$(basename "$apk")"
+            echo "=== $name ==="
+            ls -la "$apk"
+            md5sum "$apk"
+            sha256sum "$apk"
+            "$apksigner_path" verify --min-sdk-version 34 "$apk" \
+              && echo "  ^ 签名校验通过"
+            cp "$apk" out/
+          done
 
       - name: 上传 APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: sta-apk-${{ github.sha }}
-          path: ${{ steps.apk.outputs.path }}
+          name: sta-apks-${{ github.sha }}
+          path: out/*.apk
           archive: false
           if-no-files-found: error
           retention-days: 14
