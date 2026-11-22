@@ -1515,6 +1515,8 @@ private fun StockChartDockPanel(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .height(panelContentDp)
+                // 横向手势冲突在 AgentAppShell 里解决：K 线面板展开时
+                // 直接禁用外层 anchoredDraggable，不在这里做事件消费。
                 .graphicsLayer { alpha = if (collapsed) 0f else 1f },
         ) {
             io.github.mangi.eta.ui.stock.StockChartInlinePanel(

@@ -283,7 +283,12 @@ internal fun AgentAppShell(
             ConversationSidePaneScaffold(
                 state = conversationPaneState,
                 visible = isConversationPaneOpen,
-                backHandlerEnabled = isCurrentRoute,
+                // K 线面板展开时禁用侧栏手势：WebView 不是 Compose 子级，
+                // 外层 anchoredDraggable 会把横向拖动抢走，表现为「滑 K 线没反应、
+                // 反而把会话侧栏拉出来」。面板折叠成一条时保持侧栏可用。
+                backHandlerEnabled = isCurrentRoute &&
+                    !(io.github.mangi.eta.ui.stock.StockChartUiState.expanded &&
+                        !io.github.mangi.eta.ui.stock.StockChartUiState.collapsed),
                 onOpen = onOpenConversationPane,
                 onDismiss = onDismissConversationPane,
                 onSearchChange = onSearchConversations,
