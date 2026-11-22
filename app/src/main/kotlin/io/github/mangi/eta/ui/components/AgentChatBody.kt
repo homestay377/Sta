@@ -1547,11 +1547,12 @@ private fun StockChartDockPanel(
     val panelContentDp = if (collapsed) 0.dp else expandedDp
     val totalDp = panelContentDp + stripDp
 
-    // 面板拖到很矮时进入超紧凑模式：顶部行情卡 / 周期条 / 指标条全部隐藏，
-    // 把有限的高度全留给 K 线主图。股票名 / 周期 / 涨跌幅已在折叠条上。
-    // 阈值取初始高度的一半（barBottomFraction）再往上一点，让「拖到底」时生效。
-    val compactThreshold = io.github.mangi.eta.ui.stock.StockChartUiState.barBottomFraction * 1.15f
-    val compact = !collapsed && frac <= compactThreshold
+    // 只要面板不是最大高度（被拖小过），就进入紧凑模式：
+    // 顶部行情卡 / 周期条 / 指标条全部隐藏，把高度留给 K 线主图。
+    // 股票名 / 周期 / 涨跌幅已在折叠条上，信息不丢。
+    // 加一点点余量，避免浮点误差把「刚好最大」判成紧凑。
+    val compact = !collapsed &&
+        frac < io.github.mangi.eta.ui.stock.StockChartUiState.barTopFraction - 0.001f
     LaunchedEffect(compact) {
         io.github.mangi.eta.ui.stock.StockChartLink.setCompact(compact)
     }

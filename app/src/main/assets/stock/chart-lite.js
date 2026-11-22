@@ -133,6 +133,15 @@
       var v = !!on;
       if (root.getAttribute('data-compact') === (v ? '1' : '0')) return;
       root.setAttribute('data-compact', v ? '1' : '0');
+      // 紧凑态不要副图（MACD/KDJ/RSI）：面板本来就是被拖小的，
+      // 再多切一条副图出来，主图就真没地方了。
+      try {
+        var c = window.__app && window.__app.chart ? window.__app.chart() : null;
+        if (c) {
+          if (v) { c._subBeforeCompact = c.subType || ''; c.setSub && c.setSub(''); }
+          else if (c._subBeforeCompact) { c.setSub && c.setSub(c._subBeforeCompact); c._subBeforeCompact = ''; }
+        }
+      } catch (e) {}
       // 会让图表可用高度变化，重算一次
       setTimeout(function () {
         try { window.dispatchEvent(new Event('resize')); } catch (e) {}
