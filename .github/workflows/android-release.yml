@@ -66,12 +66,14 @@ jobs:
           ETA_RELEASE_KEY_ALIAS: ${{ secrets.ETA_RELEASE_KEY_ALIAS }}
           ETA_RELEASE_KEY_PASSWORD: ${{ secrets.ETA_RELEASE_KEY_PASSWORD }}
         run: |
+          # Sta：没配签名 Secrets 时不失败，交给 Gradle 回退到 debug 证书（app/build.gradle.kts
+          # 里 release 的 signingConfig 就是 "release ?: debug"）。配了就走正式签名。
           if [[ -z "$ETA_RELEASE_KEYSTORE_BASE64" ||
                 -z "$ETA_RELEASE_STORE_PASSWORD" ||
                 -z "$ETA_RELEASE_KEY_ALIAS" ||
                 -z "$ETA_RELEASE_KEY_PASSWORD" ]]; then
-            echo "::error::缺少 Release 签名 Secrets，请检查仓库的 Actions Secrets。"
-            exit 1
+            echo "::notice::未配置 Release 签名 Secrets，本次使用 debug 证书签名（可覆盖安装验证）。"
+            exit 0
           fi
           printf '%s' "$ETA_RELEASE_KEYSTORE_BASE64" \
             | base64 --decode \

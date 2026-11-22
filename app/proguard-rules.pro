@@ -70,3 +70,14 @@
 -keep class io.github.mangi.eta.agent.virtualdisplay.VirtualDisplayCommandMain {
     public static void main(java.lang.String[]);
 }
+
+# ---- Sta: WebView JS 桥 ----
+# @JavascriptInterface 方法名会被 R8 重命名，重命名后 window.NativeBridge.xxx 全部失效，
+# 表现为 K 线面板白屏 / callNative 全部 reject。类名与方法名都必须保留。
+-keep class io.github.mangi.eta.ui.stock.StockNativeBridge { *; }
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+# 缠论 / 取数层被反射或 JSON 序列化引用到的数据类
+-keep class io.github.mangi.eta.chan.** { *; }
+-keep class io.github.mangi.eta.ui.stock.** { *; }
