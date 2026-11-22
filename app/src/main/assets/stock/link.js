@@ -23,11 +23,18 @@
   function brief() {
     var a = api();
     if (!a) return null;
+    var price = (typeof a.currentPrice === 'function') ? a.currentPrice() : null;
+    var change = (typeof a.currentChange === 'function') ? a.currentChange() : null;
+    var pct = (typeof a.currentPct === 'function') ? a.currentPct() : null;
     var b = {
       code: a.currentCode() || '',
       name: a.currentName() || '',
       period: a.currentPeriod() || ''
     };
+    // 紧凑态顶部行情卡被隐藏，现价/涨跌幅改由折叠条显示，所以随 brief 一起回传。
+    if (price != null && isFinite(price)) b.price = price;
+    if (change != null && isFinite(change)) b.change = change;
+    if (pct != null && isFinite(pct)) b.pct = pct;
     push('brief', b);
     return b;
   }

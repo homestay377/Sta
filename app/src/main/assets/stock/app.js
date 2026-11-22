@@ -4527,6 +4527,11 @@
     currentCode: function () { return S.code; },
     currentName: function () { return S.name; },
     currentPeriod: function () { return S.period; },
+    // 折叠条要显示现价 / 涨跌幅：紧凑态顶部行情卡被隐藏了，
+    // 这几个值只能从这里回传 Kotlin，否则信息就丢了。
+    currentPrice: function () { return S.quote ? S.quote.price : null; },
+    currentChange: function () { return S.quote ? S.quote.change : null; },
+    currentPct: function () { return S.quote ? S.quote.pct : null; },
     makeStream: makeStream,
     toggleSheet: toggleSheet,
     applySheetHeight: applySheetHeight,

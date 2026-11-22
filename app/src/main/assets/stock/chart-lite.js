@@ -121,7 +121,32 @@
       if (divider) divider.style.display = 'none';
     }
 
-    /* ---------- 5. 布局变矮了，重算图表尺寸 ---------- */
+    /* ---------- 5. 超紧凑模式：面板被拖到很矮时，只留 K 线 ---------- *
+     *
+     * 面板只剩「主图」这么大的时候，顶部那几行（行情卡 / 周期条 / 指标条）
+     * 会把本来就不多的图高再吃掉一截，主图就真的没法看了。
+     *
+     * 这里对外暴露一个开关：Kotlin 那边按面板高度决定要不要进入 compact，
+     * 进入后把这些栏隐藏；股票名称、周期、涨跌幅已经在折叠条上了，信息不丢。
+     */
+    function setCompact(on) {
+      var v = !!on;
+      if (root.getAttribute('data-compact') === (v ? '1' : '0')) return;
+      root.setAttribute('data-compact', v ? '1' : '0');
+      // 会让图表可用高度变化，重算一次
+      setTimeout(function () {
+        try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        try {
+          if (window.__app && window.__app.chart) {
+            var c = window.__app.chart();
+            if (c && c.render) c.render();
+          }
+        } catch (e) {}
+      }, 30);
+    }
+    window.__setChartCompact = setCompact;
+
+    /* ---------- 6. 布局变矮了，重算图表尺寸 ---------- */
     setTimeout(function () {
       try { window.dispatchEvent(new Event('resize')); } catch (e) {}
       try {

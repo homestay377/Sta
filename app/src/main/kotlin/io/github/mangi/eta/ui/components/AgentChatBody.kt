@@ -1476,6 +1476,40 @@ private fun StockChartFoldStrip(
             style = MiuixTheme.textStyles.body2.copy(fontSize = 11.sp),
             color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.6f),
         )
+        // 现价 + 涨跌幅：紧凑态顶部行情卡被隐藏，这些信息就靠折叠条承载，
+        // 拖到最矮时仍然看得到当前价格和涨跌。
+        val price = io.github.mangi.eta.ui.stock.StockChartLink.panelPrice
+        val pct = io.github.mangi.eta.ui.stock.StockChartLink.panelPct
+        if (price != null && pct != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            val upColor = Color(0xFFE53935)
+            val downColor = Color(0xFF43A047)
+            val flatColor = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            val chgColor = when {
+                pct > 0.0 -> upColor
+                pct < 0.0 -> downColor
+                else -> flatColor
+            }
+            Text(
+                text = String.format(java.util.Locale.US, "%.2f", price),
+                style = MiuixTheme.textStyles.body2.copy(fontSize = 11.5.sp, fontWeight = FontWeight.Medium),
+                color = chgColor,
+                maxLines = 1,
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = String.format(
+                    java.util.Locale.US,
+                    "%s%.2f%%",
+                    if (pct > 0.0) "+" else "",
+                    pct,
+                ),
+                style = MiuixTheme.textStyles.body2.copy(fontSize = 11.sp),
+                color = chgColor,
+                maxLines = 1,
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
     }
 }
 
@@ -1512,6 +1546,15 @@ private fun StockChartDockPanel(
     val expandedDp = (screenHeightPx * frac).dp
     val panelContentDp = if (collapsed) 0.dp else expandedDp
     val totalDp = panelContentDp + stripDp
+
+    // 面板拖到很矮时进入超紧凑模式：顶部行情卡 / 周期条 / 指标条全部隐藏，
+    // 把有限的高度全留给 K 线主图。股票名 / 周期 / 涨跌幅已在折叠条上。
+    // 阈值取初始高度的一半（barBottomFraction）再往上一点，让「拖到底」时生效。
+    val compactThreshold = io.github.mangi.eta.ui.stock.StockChartUiState.barBottomFraction * 1.15f
+    val compact = !collapsed && frac <= compactThreshold
+    LaunchedEffect(compact) {
+        io.github.mangi.eta.ui.stock.StockChartLink.setCompact(compact)
+    }
 
     Box(modifier = modifier.fillMaxWidth().height(totalDp).clipToBounds()) {
         // 面板本体：折叠时压到 0 高、透明，但仍在树里 → WebView 不销毁。

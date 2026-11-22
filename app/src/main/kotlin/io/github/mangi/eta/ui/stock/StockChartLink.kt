@@ -41,6 +41,11 @@ internal object StockChartLink {
         private set
 
     var panelPeriod by mutableStateOf("")
+
+    /** 面板当前标的的现价 / 涨跌额 / 涨跌幅（%）。紧凑态顶部行情卡隐藏后，折叠条靠它们显示。 */
+    var panelPrice by mutableStateOf<Double?>(null)
+    var panelChange by mutableStateOf<Double?>(null)
+    var panelPct by mutableStateOf<Double?>(null)
         private set
 
     /** 面板就绪前要补发的 JS（去重靠内容本身，队列很小）。 */
@@ -85,6 +90,9 @@ internal object StockChartLink {
         panelCode = newCode
         panelName = obj.optString("name")
         panelPeriod = obj.optString("period")
+        panelPrice = if (obj.has("price")) obj.optDouble("price").takeIf { it.isFinite() } else null
+        panelChange = if (obj.has("change")) obj.optDouble("change").takeIf { it.isFinite() } else null
+        panelPct = if (obj.has("pct")) obj.optDouble("pct").takeIf { it.isFinite() } else null
         // 换股后顺手把多级别摘要预热好：模型真要分析时通常已经算完，
         // 免得工具一调用就干等几秒行情接口。
         if (changed) {
@@ -249,6 +257,17 @@ internal object StockChartLink {
     }
 
     /** 模型可能写成 30分钟 / 30m / m30 / 30min，统一成页面认的 wire 值。 */
+    /**
+     * 超紧凑模式开关。
+     *
+     * 面板被拖到很矮、只剩主图那么高时，顶部那几行（行情卡 / 周期条 / 指标条）
+     * 会把本来就不多的图高再吃掉一截。打开后由 chart-lite.js 把它们隐藏，
+     * 股票名称 / 周期 / 涨跌幅仍在 Kotlin 侧的折叠条上，信息不丢。
+     */
+    fun setCompact(on: Boolean) {
+        postJs("(function(){try{window.__setChartCompact&&window.__setChartCompact($on);}catch(e){}})()")
+    }
+
     fun normalizePeriod(raw: String): String? {
         val t = raw.trim().lowercase().replace(" ", "")
         if (t.isEmpty()) return null
