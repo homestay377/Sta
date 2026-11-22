@@ -1,9 +1,9 @@
 name: Eta Build
 
 on:
+  # Sta：日常 push 交给 quick-apk.yml（只出包，5 分钟）；
+  # 这里只在打 tag 发版或手动触发时跑完整校验（lint + 2127 个单测）。
   push:
-    branches:
-      - main
     tags:
       - "v*"
   workflow_dispatch:
