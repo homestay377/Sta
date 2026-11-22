@@ -1,3 +1,8 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -64,12 +69,15 @@ android {
         // 随时间单调递增，覆盖安装不会倒挂。
         //
         // versionName 用 1.0.<MMddHHmm>，和文件名的构建时间对得上。
-        val now = java.util.Date()
+        // ★ build.gradle.kts 里不能直接写 java.util.Date —— Gradle 的 `java`
+        //   扩展会遮蔽 JDK 的 java 包，报 Unresolved reference 'util'。
+        //   解决办法是在文件顶部 import（见第 1-4 行），这里就能直接用 Date。
+        val now = Date()
         val daysSinceEpoch = (now.time / 86_400_000L).toInt()
         val minuteOfDay = ((now.time % 86_400_000L) / 60_000L).toInt()
         versionCode = daysSinceEpoch * 100_000 + minuteOfDay
-        val buildStamp = java.text.SimpleDateFormat("MMddHHmm", java.util.Locale.US)
-            .apply { timeZone = java.util.TimeZone.getTimeZone("Asia/Shanghai") }
+        val buildStamp = SimpleDateFormat("MMddHHmm", Locale.US)
+            .apply { timeZone = TimeZone.getTimeZone("Asia/Shanghai") }
             .format(now)
         versionName = "1.0.$buildStamp"
 
