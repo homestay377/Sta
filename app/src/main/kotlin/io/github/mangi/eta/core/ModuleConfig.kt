@@ -16,6 +16,10 @@ internal object ModuleConfig {
     val XIAOMI_LAUNCHER_PACKAGES = setOf(XIAOMI_LAUNCHER_PACKAGE, XIAOMI_GLOBAL_LAUNCHER_PACKAGE)
     const val GOOGLE_ASSISTANT_COMPONENT =
         "$GOOGLE_PACKAGE/com.google.android.voiceinteraction.GsaVoiceInteractionService"
+    // 语音助理组件：包名用运行时 applicationId（io.github.sta），类名用 namespace
+    // （io.github.mangi.eta，源码包名不随 applicationId 变）。
+    // 两者不同，所以不能用 ".xxx" 短形式 —— 那会被展成 io.github.sta.agent.voice...，
+    // 指向一个不存在的类。必须写完整的类全限定名。
     val ETA_VOICE_INTERACTION_COMPONENT =
         "$ETA_PACKAGE/io.github.mangi.eta.agent.voice.EtaVoiceInteractionService"
     const val ASSISTANT_ROLE = "android.app.role.ASSISTANT"
