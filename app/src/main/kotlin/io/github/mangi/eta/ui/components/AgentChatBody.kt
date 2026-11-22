@@ -1499,8 +1499,13 @@ private fun StockChartDockPanel(
     // 避免依赖 bottomBar 的约束（后者会被内容撑高）。
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val screenHeightPx = configuration.screenHeightDp
+    // 渲染范围必须与拖拽范围一致，否则出现「拖了没反应」：
+    // 拖拽改的是 0.12~0.333，这里却被夹在 0.25~0.6，往下拖到 0.25 就看起来卡住了。
     val frac = io.github.mangi.eta.ui.stock.StockChartUiState.heightFraction
-        .coerceIn(0.25f, 0.6f)
+        .coerceIn(
+            io.github.mangi.eta.ui.stock.StockChartUiState.barBottomFraction,
+            io.github.mangi.eta.ui.stock.StockChartUiState.barTopFraction,
+        )
     // 折叠条固定占底部 36dp：折叠态整块就 36dp，展开态面板高度 + 36dp。
     // 这样把手永远在同一个底部位置，也不会盖住 K 线。
     val stripDp = 36.dp

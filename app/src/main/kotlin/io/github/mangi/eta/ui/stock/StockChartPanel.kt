@@ -96,8 +96,7 @@ object StockChartUiState {
      * 面板从顶部往下长，消息如果铺满整块就会一直钻到面板底下被挡住，
      * 所以消息区的底部内边距要等于这块高度，让正文正好止于拖拽条。
      */
-    // 默认就停在屏幕 1/3 处：打开面板就是「图尽量大、下面还留得住对话」的位置，
-    // 想给对话更多空间再往下拖（最多到 2/3）。
+    // 初始就是最大高度（屏幕 1/3）：只能往下拖变小，不能把图再拉大。
     var heightFraction by mutableFloatStateOf(1f / 3f)
 
     /** 拖拽条内部累计的“真实手指位移”，带死区，不对外暴露。 */
@@ -115,14 +114,14 @@ object StockChartUiState {
      * 放在布局里做（见 AgentChatBody），这里只给屏幕占比的上下限。
      */
 
-    /** 拖拽条最高能到屏幕的这个位置（再往上 K 线就被压没了）。 */
+    /** 面板能占内容区的最大比例 = 初始高度，往上拖不动（图不会再变大）。 */
     internal val barTopFraction = 1f / 3f
 
-    /** 拖拽条最低只能到屏幕的这个位置（再往下对话区不够用）。 */
-    internal val barBottomFraction = 2f / 3f
+    /** 面板能缩到的最小比例：留够 K 线可读的高度，再小就没意义了。 */
+    internal val barBottomFraction = 0.12f
 
-    /** 默认位置：两条线之间的中点，约等于屏幕 1/2。 */
-    internal val defaultPanelFraction = 0.5f
+    /** 初始位置：等于上限，打开就是最大。 */
+    internal val defaultPanelFraction = barTopFraction
 
     /** 1px 手指位移 → 多少 px 面板高度（<1 表示减速，手感更稳）。 */
     internal val dragGain = 0.28f
@@ -243,8 +242,10 @@ fun StockChartInlinePanel(
                         if (kotlin.math.abs(StockChartUiState.dragAccum) < StockChartUiState.dragDeadZonePx) return@detectVerticalDragGestures
                         val deltaFraction = -with(density) { StockChartUiState.dragAccum / availablePx }
                         StockChartUiState.dragAccum = 0f
+                        // barBottomFraction < barTopFraction（面板越小占比越低），
+                        // coerceIn 要求 min <= max，所以顺序是 下界→上界。
                         val next = (StockChartUiState.heightFraction + deltaFraction)
-                            .coerceIn(StockChartUiState.barTopFraction, StockChartUiState.barBottomFraction)
+                            .coerceIn(StockChartUiState.barBottomFraction, StockChartUiState.barTopFraction)
                         StockChartUiState.heightFraction = next
                         onHeightFractionChange(next)
                     }
