@@ -114,14 +114,14 @@ object StockChartUiState {
      * 放在布局里做（见 AgentChatBody），这里只给屏幕占比的上下限。
      */
 
+    /** 初始面板高度占内容区的比例。整个缩放的基准都以它为准。 */
+    internal val defaultPanelFraction = 1f / 3f
+
     /** 面板能占内容区的最大比例 = 初始高度，往上拖不动（图不会再变大）。 */
-    internal val barTopFraction = 1f / 3f
+    internal val barTopFraction = defaultPanelFraction
 
-    /** 面板能缩到的最小比例：留够 K 线可读的高度，再小就没意义了。 */
-    internal val barBottomFraction = 0.12f
-
-    /** 初始位置：等于上限，打开就是最大。 */
-    internal val defaultPanelFraction = barTopFraction
+    /** 面板最小只能缩到初始高度的一半，再往下就没法看了。 */
+    internal val barBottomFraction = defaultPanelFraction / 2f
 
     /** 1px 手指位移 → 多少 px 面板高度（<1 表示减速，手感更稳）。 */
     internal val dragGain = 0.28f
