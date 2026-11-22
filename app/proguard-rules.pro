@@ -78,6 +78,9 @@
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
 }
-# 缠论 / 取数层被反射或 JSON 序列化引用到的数据类
--keep class io.github.mangi.eta.chan.** { *; }
--keep class io.github.mangi.eta.ui.stock.** { *; }
+# 缠论 / 取数层：只保留会被 JS 桥和反射碰到的入口，不要整包 keep。
+# 整包 keep 会让 R8 跳过这两个包的全部优化，混淆阶段反而更慢。
+-keep class io.github.mangi.eta.chan.Chanlun { *; }
+-keep class io.github.mangi.eta.chan.TdxFormula { *; }
+-keep class io.github.mangi.eta.chan.ChanJson { *; }
+-keep class io.github.mangi.eta.ui.stock.StockChartLink { *; }

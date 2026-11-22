@@ -31,22 +31,22 @@ jobs:
       - name: 配置构建环境
         uses: ./.github/actions/setup-build
 
-      - name: 构建 Release APK
-        # 不做签名配置：Gradle 里 release 的 signingConfig 是 "release ?: debug"，
-        # 没配正式证书时自动用 debug 证书，可直接覆盖安装。
+      - name: 构建 Debug APK
+        # 出 debug 包：不做 R8 混淆，编译快，装到手机上功能完全一样，
+        # 用来快速验证 K 线 / 缠论 / 工具是否正常。Release 走 android-release.yml。
         run: |
           ./gradlew --no-daemon --no-configuration-cache \
             -Peta.buildMetadata=${GITHUB_SHA::7} \
-            :app:assembleRelease
+            :app:assembleDebug
 
       - name: 整理并校验 APK
         id: apk
         run: |
           shopt -s nullglob
-          apks=(app/build/outputs/apk/release/*.apk)
+          apks=(app/build/outputs/apk/debug/*.apk)
           if [[ ${#apks[@]} -ne 1 ]]; then
-            echo "::error::Release APK 数量异常（${#apks[@]}）"
-            ls -la app/build/outputs/apk/release/ || true
+            echo "::error::Debug APK 数量异常（${#apks[@]}）"
+            ls -la app/build/outputs/apk/debug/ || true
             exit 1
           fi
           apk="${apks[0]}"
