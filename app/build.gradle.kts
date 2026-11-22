@@ -52,9 +52,26 @@ android {
         applicationId = "io.github.sta"
         minSdk = 34
         targetSdk = 37
-        // versionCode 规则：yyyyMMdd + 两位当日序号（01 起），发版时随 versionName 一起手动递增。
-        versionCode = 2026112201
-        versionName = "1.0.0"
+        // versionCode / versionName 都由构建时刻生成，不再手写。
+        //
+        // 以前是手写 2026112201，出包时忘了改就会出现
+        // 「文件名叫 v1.0.7、装上去还是 1.0.0」，也分不清哪个包更新。
+        //
+        // versionCode 必须 < 2100000000（Android 上限）。
+        // 直接拼 yyyyMMddHHmm 是 12 位（2.0e11），会构建失败，
+        // 所以用「距 1970 的天数 × 100000 + 当日分钟数」：
+        //   2026-11 ≈ 20779 × 100000 + 537 = 2,077,900,537 ✓
+        // 随时间单调递增，覆盖安装不会倒挂。
+        //
+        // versionName 用 1.0.<MMddHHmm>，和文件名的构建时间对得上。
+        val now = java.util.Date()
+        val daysSinceEpoch = (now.time / 86_400_000L).toInt()
+        val minuteOfDay = ((now.time % 86_400_000L) / 60_000L).toInt()
+        versionCode = daysSinceEpoch * 100_000 + minuteOfDay
+        val buildStamp = java.text.SimpleDateFormat("MMddHHmm", java.util.Locale.US)
+            .apply { timeZone = java.util.TimeZone.getTimeZone("Asia/Shanghai") }
+            .format(now)
+        versionName = "1.0.$buildStamp"
 
         ndk {
             // 同时过滤本地与依赖 AAR 的原生库，确保 APK 仅包含 ARM64。

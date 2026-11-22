@@ -197,6 +197,14 @@ html,body{
 .chan-status .cs-item b{font-weight:600;color:var(--text);}
 .chan-status .cs-up{color:var(--chan);}
 .chan-status .cs-down{color:var(--down);}
+/* 买卖点用的红绿：跟 K 线涨跌一套色，别让人再去猜哪个是买 */
+.chan-status .cs-buy{color:var(--up);}
+.chan-status .cs-sell{color:var(--down);}
+/* 最近 3 根内出现的新信号：加个底色，扫一眼就能看见 */
+.chan-status .cs-alert{
+  color:#fff;background:var(--up);border-radius:2px;padding:0 3px;
+  font-weight:600;
+}
 
 /* ================= AI 抽屉：覆盖式浮层 ================= */
 /* ================= 对话区（可拖两档） ================= */

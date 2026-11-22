@@ -782,11 +782,36 @@
       parts.push('<span class="cs-item">ZG <b>' + fx(last.zg, 2) + '</b> ZD <b>' + fx(last.zd, 2) + '</b></span>');
     }
 
-    // 最新信号
-    if (c.signals && c.signals.length) {
-      var sg = c.signals[c.signals.length - 1];
-      var scls = sg.type === 'buy' ? 'cs-buy' : 'cs-sell';
-      parts.push('<span class="cs-item ' + scls + '">' + sg.label + ' @' + fx(sg.price, 2) + '</span>');
+    // ---- 最新买卖点 / 背驰信号 ----
+    //
+    // 以前只显示背驰（signals），三类买卖点（points）完全没露出来 ——
+    // 但它们才是「什么时候动手」的直接依据，只画在图上不写出来太浪费。
+    // 这里把两者合起来，取「离当前最近的那一个」，并标出隔了多少根 K 线，
+    // 让用户一眼判断这个信号是今天的还是两个月前的。
+    var latest = null;
+    function consider(item, kind) {
+      if (!item || typeof item.idx !== 'number') return;
+      if (!latest || item.idx > latest.idx) {
+        latest = { idx: item.idx, price: item.price, label: item.label, type: item.type, kind: kind };
+      }
+    }
+    if (c.signals) for (var si = 0; si < c.signals.length; si++) consider(c.signals[si], '背离');
+    if (c.points) for (var pi = 0; pi < c.points.length; pi++) consider(c.points[pi], '买卖点');
+
+    if (latest) {
+      var isBuy = latest.type === 'buy';
+      var lcls = isBuy ? 'cs-buy' : 'cs-sell';
+      var back = (S.kl.length - 1) - latest.idx;   // 距最新一根多少根
+      var ageTxt = back <= 0 ? '当根' : ('-' + back + '根');
+      parts.push(
+        '<span class="cs-item ' + lcls + '">' +
+        '<b>' + esc(latest.label || latest.kind) + '</b> @' + fx(latest.price, 2) +
+        ' <span style="opacity:.6">' + ageTxt + '</span></span>'
+      );
+      // 最近 3 根内出现的信号额外高亮，避免"刚出的买点"被淹没在一堆数字里
+      if (back <= 2) {
+        parts.push('<span class="cs-item cs-alert">★ 新信号</span>');
+      }
     }
 
     if (cost !== undefined) {
