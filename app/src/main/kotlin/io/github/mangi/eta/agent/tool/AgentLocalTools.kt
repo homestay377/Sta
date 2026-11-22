@@ -240,6 +240,17 @@ internal class AgentLocalTools(
                 }
             }
             when (toolCall.name) {
+                "stock_chart_annotate" -> textResult(annotateStockChart(args))
+                "stock_chart_read" -> textResult(readStockChart(args))
+                "stock_levels" -> textResult(stockLevels(args))
+                "analyze_chan" -> textResult(analyzeChan(args))
+                "get_fundamental" -> textResult(getFundamental(args))
+                "compare_fundamental" -> textResult(compareFundamental(args))
+                "market_overview" -> textResult(marketOverview(args))
+                "scan_watchlist" -> textResult(scanWatchlist(args))
+                "save_decision" -> textResult(saveDecision(args))
+                "record_trade" -> textResult(recordTrade(args))
+                "review_trades" -> textResult(reviewTrades(args))
                 "get_current_context" -> textResult(DeviceContextTool.current(context))
                 "search_apps" -> textResult(searchApps(args))
                 "launch_app" -> {
@@ -1697,6 +1708,490 @@ internal class AgentLocalTools(
             .put("message", message)
             .toString()
 
+    private fun readStockChart(args: JSONObject): String {
+        val limit = if (args.has("limit")) args.optInt("limit", 160) else 160
+        val symbol = args.optString("symbol").trim()
+        val link = io.github.mangi.eta.ui.stock.StockChartLink
+        if (symbol.isNotEmpty()) {
+            // ★ 境外品种（纳指/伦敦金/美股）走不了面板：前端 smartbox 和 K 线请求只认 A 股。
+            //   早识别早报错，并明确指引到能用的工具，而不是让用户"换成6位代码"——
+            //   伦敦金根本没有 6 位代码，那句话会把用户带进死胡同。
+            if (io.github.mangi.eta.ui.stock.StockKlineSource.isGlobalCode(symbol)) {
+                val std = io.github.mangi.eta.ui.stock.StockGlobalSource.resolve(symbol)
+                    ?: symbol
+                return errorResult(
+                    "USE_ANALYZE_CHAN",
+                    "「$symbol」是境外品种（${io.github.mangi.eta.ui.stock.StockGlobalSource.displayName(std)}），" +
+                        "K 线面板只支持 A 股，无法切换。请改用 analyze_chan（symbol 填 $std）分析——" +
+                        "它原生取数，不需要面板，同样能给笔/中枢/背驰。",
+                )
+            }
+            val switched = link.switchTo(symbol)
+            if (switched == null) {
+                return errorResult(
+                    "SWITCH_FAILED",
+                    "没能把 K 线面板切到「$symbol」：可能搜不到这只，或面板还在加载。" +
+                        "换 6 位代码（如 300274）再调用一次。",
+                )
+            }
+            if (!switched.ok) {
+                return errorResult(
+                    "SYMBOL_NOT_FOUND",
+                    "搜不到「$symbol」对应的股票（${switched.reason.ifBlank { "no-match" }}）。" +
+                        "请换成 6 位代码或准确简称再试。",
+                )
+            }
+        } else if (!link.ensureReady()) {
+            return errorResult(
+                "NO_CHART",
+                "K 线面板没能加载出数据（可能断网或行情接口失败），先让用户稍后再试，不要凭空编造行情。",
+            )
+        }
+        val periodArg = args.optString("period").trim()
+        if (periodArg.isNotEmpty()) {
+            val normalized = link.normalizePeriod(periodArg) ?: return errorResult(
+                "BAD_PERIOD",
+                "period 只支持 分时/minute、5m、15m、30m、60m、日线/day、周线/week、月线/month。",
+            )
+            if (!link.switchPeriod(normalized)) {
+                return errorResult(
+                    "PERIOD_FAILED",
+                    "K 线面板没能切到 $normalized 级别（可能行情接口超时）。稍等再调用一次，或先用当前级别分析。" +
+                        "不要假装看过那个级别。",
+                )
+            }
+        }
+        val snapshot = link.snapshot(limit)
+        if (snapshot.isNullOrBlank()) {
+            return errorResult(
+                "NO_DATA",
+                "面板已经打开，但当前还没有 K 线数据可读：稍等一两秒再调用一次。",
+            )
+        }
+        return snapshot
+    }
+
+    /**
+     * 多级别走势：原生取数，完全不碰 WebView。
+     *
+     * 面板是否展开、当前停在哪个级别，都与本工具无关 —— 这是它和 stock_chart_read 的
+     * 根本区别。stock_chart_read 是「看用户眼前这张图」，本工具是「自己把数拉出来算」。
+     */
+    /**
+     * 缠论分析（原生自主取数）。
+     *
+     * 与 [readStockChart] 的区别：**完全不碰 K 线面板**——自己调行情接口取数、
+     * 自己跑 Kotlin 引擎、自己渲染摘要。面板没开、面板上是别的票、甚至面板正在加载，
+     * 都不影响结果。所以 AI 问「300274 周线现在有几个中枢」时不需要先切面板。
+     *
+     * 根数固定 640（腾讯日线上限）：喂得太少时 BARSLAST/SUMBARS 在序列左端没有历史，
+     * 会凭空造出中枢，这是图上「最左边多一个框」的根因。
+     */
+    private fun analyzeChan(args: JSONObject): String {
+        val symbolArg = args.optString("symbol").trim()
+        val code: String
+        val name: String
+        if (symbolArg.isNotEmpty()) {
+            val resolved = io.github.mangi.eta.ui.stock.StockKlineSource.resolve(symbolArg)
+                ?: return errorResult(
+                    "SYMBOL_NOT_FOUND",
+                    "搜不到「$symbolArg」。请换成 6 位代码（如 300274）或准确的股票简称再调用一次，" +
+                        "不要拿别的股票的数据代替。",
+                )
+            code = resolved.code
+            name = resolved.name
+        } else {
+            // 没点名就用面板当前那只；面板也没选就报错，不瞎猜
+            val cur = io.github.mangi.eta.ui.stock.StockChartLink.panelCode
+            if (cur.isBlank()) {
+                return errorResult(
+                    "NO_TARGET",
+                    "用户没有指定股票，K 线面板也没有选中标的。请先问清是哪只股票再调用。",
+                )
+            }
+            code = cur
+            name = io.github.mangi.eta.ui.stock.StockChartLink.panelName
+        }
+
+        val periodArg = args.optString("period").trim()
+        val period = if (periodArg.isEmpty()) {
+            "day"
+        } else {
+            io.github.mangi.eta.ui.stock.StockKlineSource.validPeriod(periodArg)
+                ?: return errorResult(
+                    "BAD_PERIOD",
+                    "period 只支持 minute / 5m / 15m / 30m / 60m / day / week / month。",
+                )
+        }
+
+        val text = io.github.mangi.eta.ui.stock.StockChanSource.analyzeText(
+            context,
+            code,
+            period,
+            io.github.mangi.eta.ui.stock.StockChanSource.DEFAULT_BARS,
+        )
+        val head = if (name.isNotBlank()) "$name（${code.uppercase()}）" else code.uppercase()
+        return "标的：$head\n$text"
+    }
+
+    // ==================== 决策留痕 ====================
+
+    private fun journalPrefs() =
+        context.getSharedPreferences("stock_trade_journal", Context.MODE_PRIVATE)
+
+    private fun readJournal(): String =
+        journalPrefs().getString("data", "{}") ?: "{}"
+
+    private fun writeJournal(s: String) {
+        journalPrefs().edit().putString("data", s).apply()
+    }
+
+    /** 模型给出可执行建议时存一条。只在字段齐全时记录，避免存一堆废话。 */
+    private fun saveDecision(args: JSONObject): String {
+        val code = args.optString("code").trim()
+        val action = args.optString("action").trim().lowercase()
+        val price = args.optDouble("price", 0.0)
+        if (code.isBlank() || action.isBlank() || price <= 0) {
+            return errorResult(
+                "BAD_ARGS",
+                "记录建议需要 code（代码）、action（buy/sell/watch）、price（价位）。" +
+                    "只在给出可执行建议时才记录，闲聊不用调用。",
+            )
+        }
+        val entry = JSONObject()
+            .put("time", args.optString("time").ifBlank { nowText() })
+            .put("code", code.uppercase())
+            .put("name", args.optString("name").trim())
+            .put("action", action)
+            .put("price", price)
+            .put("stop", args.optDouble("stop", Double.NaN).let { if (it.isFinite()) it else null })
+            .put("level", args.optString("level").trim())
+            .put("confidence", args.optString("confidence").trim())
+            .put("reason", args.optString("reason").trim())
+            .put("boxPosition", args.optString("box_position").trim())
+        val store = readJournal()
+        val updated = io.github.mangi.eta.ui.stock.TradeJournal.append(
+            store, io.github.mangi.eta.ui.stock.TradeJournal.Kind.DECISION, entry,
+        )
+        writeJournal(updated)
+        val n = io.github.mangi.eta.ui.stock.TradeJournal.total(updated)
+        return "已记录账本第 $n 条（建议）：$code $action @$price。以后可以让我复盘。"
+    }
+
+    /** 用户实际成交时记一条——这是算真实盈亏的前提。 */
+    private fun recordTrade(args: JSONObject): String {
+        val code = args.optString("code").trim()
+        val side = args.optString("side").trim().lowercase()
+        val price = args.optDouble("price", 0.0)
+        val qty = args.optDouble("qty", 0.0)
+        if (code.isBlank() || (side != "buy" && side != "sell") || price <= 0 || qty <= 0) {
+            return errorResult(
+                "BAD_ARGS",
+                "记录成交需要 code（代码）、side（buy/sell）、price（成交价）、qty（股数）。" +
+                    "这些都是用户告诉你的真实数据——不确定就不要记，不要替用户编。",
+            )
+        }
+        val entry = JSONObject()
+            .put("time", args.optString("time").ifBlank { nowText() })
+            .put("code", code.uppercase())
+            .put("name", args.optString("name").trim())
+            .put("side", side)
+            .put("price", price)
+            .put("qty", qty)
+        val store = readJournal()
+        val updated = io.github.mangi.eta.ui.stock.TradeJournal.append(
+            store, io.github.mangi.eta.ui.stock.TradeJournal.Kind.TRADE, entry,
+        )
+        writeJournal(updated)
+        val n = io.github.mangi.eta.ui.stock.TradeJournal.total(updated)
+        return "已记录成交：$code $side ${qty.toLong()} 股 @$price。当前账本共 $n 条。"
+    }
+
+    /** 复盘：查建议 + 算真实盈亏。默认不进上下文，只有用户问才调。 */
+    private fun reviewTrades(args: JSONObject): String {
+        val code = args.optString("code").trim()
+        val store = readJournal()
+        if (io.github.mangi.eta.ui.stock.TradeJournal.total(store) == 0) {
+            return "账本还是空的。模型给建议时用 save_decision 记，用户成交时用 record_trade 记。"
+        }
+        val sb = StringBuilder()
+        if (code.isNotBlank()) {
+            val history = io.github.mangi.eta.ui.stock.TradeJournal.query(
+                store, null, code, args.optInt("limit", 20).coerceIn(1, 100),
+            )
+            sb.append("【$code 历史记录】\n").append(history).append("\n\n")
+        }
+        sb.append(io.github.mangi.eta.ui.stock.TradeJournal.review(store, code.ifBlank { null }))
+        return sb.toString()
+    }
+
+    private fun nowText(): String =
+        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+            .format(java.util.Date())
+
+    /**
+     * 基本面快照（P1）。估值 + 最近几期财报 + 龙虎榜，全部来自东方财富公开接口，免登录。
+     *
+     * 覆盖技能文档 fundamental-analysis 要求的 `get_fundamental`。
+     * **没有**营收增速、一致预期、股东明细、公告原文的数据源——这些字段不会出现在输出里。
+     */
+    private fun getFundamental(args: JSONObject): String {
+        val symbolArg = args.optString("symbol").trim()
+        val code: String
+        val name: String
+        if (symbolArg.isNotEmpty()) {
+            val resolved = io.github.mangi.eta.ui.stock.StockKlineSource.resolve(symbolArg)
+                ?: return errorResult(
+                    "SYMBOL_NOT_FOUND",
+                    "搜不到「$symbolArg」。请换成 6 位代码（如 300274）或准确的股票简称再调用一次。",
+                )
+            code = resolved.code
+            name = resolved.name
+        } else {
+            val cur = io.github.mangi.eta.ui.stock.StockChartLink.panelCode
+            if (cur.isBlank()) {
+                return errorResult("NO_TARGET", "用户没有指定股票，K 线面板也没有选中标的。请先问清是哪只股票。")
+            }
+            code = cur
+            name = io.github.mangi.eta.ui.stock.StockChartLink.panelName
+        }
+        val periods = args.optInt("periods", 4).coerceIn(1, 8)
+        val text = io.github.mangi.eta.ui.stock.StockFundamentalSource.summary(code, name, periods)
+        return "标的：$code\n$text"
+    }
+
+    /**
+     * 解析自选股存储，兼容三种历史格式：
+     *   v1 裸数组 `[{code,name}]`
+     *   v2/v3 对象 `{v,groups,list,group}` —— 自选在 **list** 字段
+     *
+     * 解析不出来返回 null（调用方据此报错），而不是静默返回空列表——
+     * 静默返回空会让用户以为"自选是空的"，其实是读错了字段。
+     */
+    private fun parseWatchlist(raw: String): org.json.JSONArray? {
+        val t = raw.trim()
+        if (t.isEmpty()) return org.json.JSONArray()
+        return try {
+            if (t.startsWith("[")) {
+                org.json.JSONArray(t)
+            } else {
+                val o = org.json.JSONObject(t)
+                val list = o.optJSONArray("list")
+                if (list != null) {
+                    list
+                } else {
+                    // v2 可能把自选放在别的键上，兜底扫一遍找第一个数组
+                    var found: org.json.JSONArray? = null
+                    for (k in o.keys()) {
+                        val v = o.optJSONArray(k)
+                        if (v != null && (v.length() == 0 || v.optJSONObject(0)?.has("code") == true)) {
+                            found = v
+                            break
+                        }
+                    }
+                    found
+                }
+            }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /** 多标的基本面横向对比，只比同一报告期（P1）。 */
+    private fun compareFundamental(args: JSONObject): String {
+        val raw = args.optString("symbols").trim()
+        val codes = if (raw.isEmpty()) {
+            val arr = args.optJSONArray("symbols")
+            (0 until (arr?.length() ?: 0)).map { arr.optString(it).trim() }
+                .filter { it.isNotEmpty() }
+        } else {
+            raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        }
+        if (codes.isEmpty()) {
+            return errorResult("BAD_ARGS", "symbols 不能为空。传 2~4 个 6 位代码，用逗号分隔。")
+        }
+        if (codes.size > 4) {
+            return errorResult("BAD_ARGS", "一次最多对比 4 只，避免输出过长。当前给了 ${codes.size} 只。")
+        }
+        val resolved = codes.mapNotNull { sym ->
+            io.github.mangi.eta.ui.stock.StockKlineSource.resolve(sym)
+        }
+        if (resolved.isEmpty()) {
+            return errorResult("SYMBOL_NOT_FOUND", "这些代码都没搜到，请换成准确的 6 位代码。")
+        }
+        val nameMap = resolved.associate { it.code to it.name }
+        val text = io.github.mangi.eta.ui.stock.StockFundamentalSource.compare(
+            resolved.map { it.code }, nameMap,
+        )
+        return text
+    }
+
+    /** 大盘概览（P2）：主要指数点位与涨跌幅。板块排行与市场宽度暂无可用数据源。 */
+    private fun marketOverview(args: JSONObject): String =
+        io.github.mangi.eta.ui.stock.StockFundamentalSource.marketOverview()
+
+    /**
+     * 自选股批量巡检（P3）。逐只取行情与结构，输出紧凑表格。
+     *
+     * 只取「收盘 + 涨跌幅 + 结构方向 + 是否有信号」，不铺全量分析，
+     * 这样 20 只票也能在上下文里装得下，模型再对有信号的几只深入。
+     */
+    private fun scanWatchlist(args: JSONObject): String {
+        val periodArg = args.optString("period").trim()
+        val period = if (periodArg.isEmpty()) "day" else {
+            io.github.mangi.eta.ui.stock.StockKlineSource.validPeriod(periodArg)
+                ?: return errorResult(
+                    "BAD_PERIOD",
+                    "period 只支持 minute / 5m / 15m / 30m / 60m / day / week / month。",
+                )
+        }
+
+        val raw = context.getSharedPreferences("stock_ai_prefs", Context.MODE_PRIVATE)
+            .getString("watchlist", "[]") ?: "[]"
+        // ★ 落盘格式必须按 groups.js 的 load() 来解析，不能只当数组读。
+        //   前端 save() 存的是 {v:3, groups:[], list:[], group:"all"}，
+        //   真正的自选在 **list** 字段里；v1 时代才是裸数组。原来只读顶层数组，
+        //   于是永远是空数组 → 稳定返回 NO_WATCHLIST（线上踩过）。
+        val arr = parseWatchlist(raw)
+            ?: return errorResult(
+                "NO_WATCHLIST",
+                "自选股列表读不出来（存储格式异常）。请让用户先在自选里加股票。",
+            )
+        if (arr.length() == 0) {
+            return errorResult("NO_WATCHLIST", "自选股列表是空的。请让用户先添加股票再巡检。")
+        }
+
+        // 先收集 (code, name)，再并发跑；不要边读边串行请求
+        val items = ArrayList<Triple<String, String, String>>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val rawCode = o.optString("code").trim().lowercase()
+            val num = rawCode.replace(Regex("^[a-z]+"), "")
+            if (!num.matches(Regex("\\d{6}"))) continue
+            // ★ 必须保留市场前缀（sz000001 / sh000001）。
+            //   剥成裸 000001 会撞车：平安银行是 sz000001，上证指数是 sh000001，
+            //   下游按首位数字推断会把 000001 当成上证指数。
+            val withMarket = if (rawCode.matches(Regex("[a-z]{2}\\d{6}"))) rawCode else num
+            items.add(Triple(withMarket, o.optString("name").trim(), rawCode))
+        }
+        if (items.isEmpty()) {
+            return errorResult("NO_WATCHLIST", "自选股里没有可识别的 6 位代码。请让用户重新添加股票。")
+        }
+
+        val rows = io.github.mangi.eta.ui.stock.StockLevels.scanMany(items, period)
+        val sb = StringBuilder()
+        sb.append("自选股巡检（").append(items.size).append(" 只，级别 ").append(period).append("）：\n")
+        for (row in rows) {
+            sb.append("  ").append(row.render()).append('\n')
+        }
+        // ★ 成败直接看结构化字段，不要去解析渲染后的字符串（旧实现用 contains("取数失败")
+        //   判断，只要股票简称里带这几个字就会误判）。
+        val failed = rows.filter { !it.ok }.map { it.code }
+        val okCount = rows.count { it.ok }
+        sb.append("\n成功 ").append(okCount).append(" 只")
+        if (failed.isNotEmpty()) {
+            sb.append("，取数失败：").append(failed.joinToString("、"))
+            sb.append("（这些不要凭空推断）")
+        }
+        if (items.size > rows.size) {
+            sb.append("\n注意：自选共 ").append(items.size)
+                .append(" 只，本次只巡检前 ").append(rows.size).append(" 只。")
+        }
+        sb.append("\n提示：对「有信号」的标的，再用 get_fundamental / analyze_chan 深入。")
+        return sb.toString()
+    }
+
+    private fun stockLevels(args: JSONObject): String {
+        val link = io.github.mangi.eta.ui.stock.StockChartLink
+
+        // 1) 确定标的：用户点名了就查名字，没点名就用面板当前那只
+        val symbolArg = args.optString("symbol").trim()
+        val code: String
+        val name: String
+        if (symbolArg.isNotEmpty()) {
+            val resolved = io.github.mangi.eta.ui.stock.StockKlineSource.resolve(symbolArg)
+                ?: return errorResult(
+                    "SYMBOL_NOT_FOUND",
+                    "搜不到「$symbolArg」。请换成 6 位代码（如 300274）或准确的股票简称再调用一次，" +
+                        "不要用别的股票的数据代替。",
+                )
+            code = resolved.code
+            name = resolved.name
+        } else {
+            val cur = link.panelCode
+            if (cur.isBlank()) {
+                return errorResult(
+                    "NO_TARGET",
+                    "用户没有指定股票，K 线面板也没有选中标的。请先问清是哪只股票，" +
+                        "或让用户打开 K 线面板选一只。",
+                )
+            }
+            code = cur
+            name = link.panelName
+        }
+
+        // 2) 级别：模型给什么就用什么，不传才用默认三档
+        val rawPeriods = mutableListOf<String>()
+        val arr = args.optJSONArray("periods")
+        if (arr != null) {
+            for (i in 0 until arr.length()) {
+                val p = arr.optString(i).trim()
+                if (p.isNotEmpty()) rawPeriods.add(p)
+            }
+        }
+        val periods = if (rawPeriods.isEmpty()) {
+            io.github.mangi.eta.ui.stock.StockLevels.DEFAULT_LEVELS
+        } else {
+            rawPeriods
+        }
+        val normalized = periods.mapNotNull { io.github.mangi.eta.ui.stock.StockKlineSource.validPeriod(it) }
+        if (normalized.isEmpty()) {
+            return errorResult(
+                "BAD_PERIOD",
+                "periods 里没有一个合法级别。可用：week / day / m60 / m30 / m15 / m5 / month。",
+            )
+        }
+
+        // 3) 取数并汇总
+        val text = io.github.mangi.eta.ui.stock.StockLevels.digest(code, normalized)
+        if (text.isBlank()) {
+            return errorResult("NO_DATA", "所有级别都没取到数据，可能是行情接口不可用；不要凭空推断。")
+        }
+        val head = if (name.isNotBlank()) "$name（${code.uppercase()}）" else code.uppercase()
+        return "标的：$head\n" + text
+    }
+
+    /** 把模型给的标注 JSON 画到 K 线面板上；面板没打开会先自己打开。 */    private fun annotateStockChart(args: JSONObject): String {
+        val json = args.optString("annotation_json").trim()
+        if (json.isEmpty()) return errorResult("BAD_ARGS", "annotation_json 不能为空")
+        if (!json.startsWith("{")) return errorResult("BAD_ARGS", "annotation_json 必须是 JSON 对象")
+        val periodArg = args.optString("period").trim()
+        if (periodArg.isNotEmpty()) {
+            val normalized = io.github.mangi.eta.ui.stock.StockChartLink.normalizePeriod(periodArg)
+            if (normalized == null) {
+                return errorResult("BAD_PERIOD", "period 只支持 分时/minute、5m、15m、30m、60m、日线/day、周线/week、月线/month。")
+            }
+            if (!io.github.mangi.eta.ui.stock.StockChartLink.switchPeriod(normalized)) {
+                return errorResult("PERIOD_FAILED", "面板没能切到 $normalized 级别，标注没有画。")
+            }
+        }
+        val result = io.github.mangi.eta.ui.stock.StockChartLink.annotate(json)
+        if (result == null) {
+            return errorResult(
+                "NO_CHART",
+                "K 线面板没能加载出来，标注没有画上；告诉用户这次没画成，不要声称已标注。",
+            )
+        }
+        if (!result.startsWith("ok")) {
+            return errorResult(
+                "ANNOTATE_REJECTED",
+                "页面拒绝了这段标注（$result）：检查 price 是否在可见区间、date 是否与 K 线时间格式一致" +
+                    "（日线 2026-11-12，分钟 2026-11-12 10:30），marks 的 price 要落在该根 K 线的最高最低之间。",
+            )
+        }
+        val note = args.optString("note").trim()
+        return if (note.isEmpty()) "已把标注画到当前 K 线面板上。" else "已画到图上：$note"
+    }
     private fun textResult(content: String): AgentModelClient.ToolResult =
         AgentModelClient.ToolResult(content)
 

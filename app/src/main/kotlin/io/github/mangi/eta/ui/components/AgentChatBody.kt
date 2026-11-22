@@ -211,6 +211,9 @@ internal fun AgentChatBody(
     val imeBottomPx = WindowInsets.ime.getBottom(density)
     val isKeyboardVisible = imeBottomPx > 0
     val browserSnapshot = LocalAgentBrowserSession.current?.snapshots?.collectAsState()?.value
+    // K 线面板展开状态：只在这里读一次，往下用参数传，避免 Scaffold 与输入框一起重建。
+    val stockPanelExpanded = io.github.mangi.eta.ui.stock.StockChartUiState.expanded
+    val stockPanelCollapsed = io.github.mangi.eta.ui.stock.StockChartUiState.collapsed
         ?: BrowserSessionSnapshot()
     val contextUsage = remember(messages, modelPickerState.selectedModel) {
         latestContextUsage(messages, modelPickerState.selectedModel)
@@ -253,6 +256,8 @@ internal fun AgentChatBody(
     SpeechPlaybackHost {
         SpeechAutoReadAloud(messages = messages, isStreaming = isStreaming)
         AgentChatScaffold(
+            stockPanelExpanded = stockPanelExpanded,
+            stockPanelCollapsed = stockPanelCollapsed,
             visibleMessages = visibleMessages,
             hasMessages = visibleMessages.isNotEmpty() || hasEarlierMessages,
             scrollState = scrollState,
@@ -378,6 +383,8 @@ private fun AgentChatScaffold(
     onLoadEarlierMessages: () -> Unit,
     onHistoryViewportChanged: (Boolean) -> Unit,
     topInset: Dp,
+    stockPanelExpanded: Boolean = false,
+    stockPanelCollapsed: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val isCoui = LocalUiStyle.current == AppearanceUiStyle.COUI
@@ -395,39 +402,51 @@ private fun AgentChatScaffold(
             bottom = 0.dp,
         ),
         bottomBar = {
-            AgentChatBottomBar(
-                input = input,
-                isCompacting = isCompacting,
-                contextUsage = contextUsage,
-                showContextUsage = hasMessages,
-                isStreaming = isStreaming,
-                reasoningEffort = reasoningEffort,
-                availableReasoningEfforts = availableReasoningEfforts,
-                pendingImages = pendingImages,
-                pendingFileReferences = pendingFileReferences,
-                queuedMessages = queuedMessages,
-                inputSyncVersion = inputSyncVersion,
-                focusInputOnSync = focusInputOnSync,
-                messageEdit = messageEdit,
-                glassBackdrop = chatBackdrop,
-                couiBackdrop = couiChatBackdrop,
-                onSubmit = onSubmit,
-                onInterruptAndSubmit = onInterruptAndSubmit,
-                onSteerQueuedMessage = onSteerQueuedMessage,
-                onRecallQueuedMessage = onRecallQueuedMessage,
-                onRemoveQueuedMessage = onRemoveQueuedMessage,
-                onReasoningEffortChange = onReasoningEffortChange,
-                onCompactContext = onCompactContext,
-                canCompactContext = canCompactContext,
-                onStop = onStop,
-                onAttachImage = onAttachImage,
-                onRemoveImage = onRemoveImage,
-                onAttachFiles = onAttachFiles,
-                onAttachFolder = onAttachFolder,
-                onAttachFilePath = onAttachFilePath,
-                onRemoveFileReference = onRemoveFileReference,
-                onCancelMessageEdit = onCancelMessageEdit,
-            )
+            // K 线面板挂在输入框（含快捷条）上方：折叠时一条，点开展开。
+            // 放这里而不是顶部，是为了让流式输出从上往下走时不被面板挤走。
+            // 面板常驻在输入框上方：不再要求 panelCode 非空。
+            val showPanel = stockPanelExpanded
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (showPanel) {
+                    StockChartDockPanel(
+                        collapsed = stockPanelCollapsed,
+                        onToggle = { io.github.mangi.eta.ui.stock.StockChartUiState.collapsed = it },
+                    )
+                }
+                AgentChatBottomBar(
+                    input = input,
+                    isCompacting = isCompacting,
+                    contextUsage = contextUsage,
+                    showContextUsage = hasMessages,
+                    isStreaming = isStreaming,
+                    reasoningEffort = reasoningEffort,
+                    availableReasoningEfforts = availableReasoningEfforts,
+                    pendingImages = pendingImages,
+                    pendingFileReferences = pendingFileReferences,
+                    queuedMessages = queuedMessages,
+                    inputSyncVersion = inputSyncVersion,
+                    focusInputOnSync = focusInputOnSync,
+                    messageEdit = messageEdit,
+                    glassBackdrop = chatBackdrop,
+                    couiBackdrop = couiChatBackdrop,
+                    onSubmit = onSubmit,
+                    onInterruptAndSubmit = onInterruptAndSubmit,
+                    onSteerQueuedMessage = onSteerQueuedMessage,
+                    onRecallQueuedMessage = onRecallQueuedMessage,
+                    onRemoveQueuedMessage = onRemoveQueuedMessage,
+                    onReasoningEffortChange = onReasoningEffortChange,
+                    onCompactContext = onCompactContext,
+                    canCompactContext = canCompactContext,
+                    onStop = onStop,
+                    onAttachImage = onAttachImage,
+                    onRemoveImage = onRemoveImage,
+                    onAttachFiles = onAttachFiles,
+                    onAttachFolder = onAttachFolder,
+                    onAttachFilePath = onAttachFilePath,
+                    onRemoveFileReference = onRemoveFileReference,
+                    onCancelMessageEdit = onCancelMessageEdit,
+                )
+            } // Column
         },
     ) { innerPadding ->
         val bottomPadding = innerPadding.calculateBottomPadding()
@@ -1403,3 +1422,118 @@ private data class SuggestionItem(
     val icon: ImageVector,
     val prompt: String,
 )
+@Composable
+private fun StockChartFoldStrip(
+    expanded: () -> Unit,
+    modifier: Modifier = Modifier,
+    showExpandArrow: Boolean = true,
+) {
+    val code = io.github.mangi.eta.ui.stock.StockChartLink.panelCode
+    val name = io.github.mangi.eta.ui.stock.StockChartLink.panelName
+    val period = io.github.mangi.eta.ui.stock.StockChartLink.panelPeriod
+    val label = when {
+        name.isNotBlank() -> name
+        code.isNotBlank() -> code.uppercase()
+        else -> "点此展开 · 让 AI 分析或选一只股票"
+    }
+    // 没标的时周期无意义，留空
+    val periodText = if (code.isBlank()) "" else io.github.mangi.eta.ui.stock.StockLevels.periodLabel(period)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(36.dp)
+            .background(MiuixTheme.colorScheme.surface)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = expanded,
+            )
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            // 折叠态显示 ▸（点它展开）；展开态显示 ⌄（点它折叠）
+            text = if (showExpandArrow) "▸ K线" else "⌄ K线",
+            style = MiuixTheme.textStyles.body2.copy(fontSize = 12.sp),
+            color = MiuixTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = label,
+            style = MiuixTheme.textStyles.body2.copy(
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Medium,
+            ),
+            color = MiuixTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = periodText,
+            style = MiuixTheme.textStyles.body2.copy(fontSize = 11.sp),
+            color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+    }
+}
+
+/**
+ * 停靠式 K 线面板：挂在输入框上方，可折叠成一条。
+ *
+ * 折叠态：36dp 的一条，显示「▸ K线 · 股票名 · 周期」，点整条展开。
+ * 展开态：按 heightFraction 决定高度，右上角有收起按钮。
+ *
+ * ★ WebView 始终留在这段组合里（折叠时用 0 高 + alpha=0 藏起来），
+ *   不触发 onRelease，K 线/标注/页面状态都不丢。
+ */
+@Composable
+private fun StockChartDockPanel(
+    collapsed: Boolean,
+    onToggle: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    // 展开高度：占屏幕高度的一定比例；用 LocalConfiguration 的屏幕高度，
+    // 避免依赖 bottomBar 的约束（后者会被内容撑高）。
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val screenHeightPx = configuration.screenHeightDp
+    val frac = io.github.mangi.eta.ui.stock.StockChartUiState.heightFraction
+        .coerceIn(0.25f, 0.6f)
+    // 折叠条固定占底部 36dp：折叠态整块就 36dp，展开态面板高度 + 36dp。
+    // 这样把手永远在同一个底部位置，也不会盖住 K 线。
+    val stripDp = 36.dp
+    val expandedDp = (screenHeightPx * frac).dp
+    val panelContentDp = if (collapsed) 0.dp else expandedDp
+    val totalDp = panelContentDp + stripDp
+
+    Box(modifier = modifier.fillMaxWidth().height(totalDp).clipToBounds()) {
+        // 面板本体：折叠时压到 0 高、透明，但仍在树里 → WebView 不销毁。
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(panelContentDp)
+                .graphicsLayer { alpha = if (collapsed) 0f else 1f },
+        ) {
+            io.github.mangi.eta.ui.stock.StockChartInlinePanel(
+                modifier = Modifier.fillMaxWidth().height(if (collapsed) expandedDp else panelContentDp),
+            )
+        }
+        when (collapsed) {
+            true -> StockChartFoldStrip(
+                expanded = { onToggle(false) },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+            false -> {
+                // 展开态：把手在**底部**，和折叠态同一位置、同样式。
+                // 点它就折叠；面板高度由顶部的拖拽条调整。
+                StockChartFoldStrip(
+                    expanded = { onToggle(true) },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    showExpandArrow = false,
+                )
+            }
+        }
+    }
+}

@@ -183,7 +183,7 @@ internal object CanvasRoutingPolicy {
         requested: RequestedDisplay = RequestedDisplay.AUTO,
         targetPackage: String? = null,
         foregroundPackageOnMainDisplay: String? = null,
-        ownPackage: String = "io.github.mangi.eta",
+        ownPackage: String = io.github.mangi.eta.core.ModuleConfig.ETA_PACKAGE,
     ): CanvasTarget = decideLaunchPlan(
         virtualDisplayEnabled = virtualDisplayEnabled,
         backendAvailable = backendAvailable,
@@ -199,7 +199,7 @@ internal object CanvasRoutingPolicy {
         requested: RequestedDisplay = RequestedDisplay.AUTO,
         targetPackage: String? = null,
         foregroundPackageOnMainDisplay: String? = null,
-        ownPackage: String = "io.github.mangi.eta",
+        ownPackage: String = io.github.mangi.eta.core.ModuleConfig.ETA_PACKAGE,
     ): CanvasLaunchPlan {
         if (!virtualDisplayEnabled) return CanvasLaunchPlan(CanvasTarget.MAIN_DISPLAY, "virtual_disabled")
         if (!backendAvailable) return CanvasLaunchPlan(CanvasTarget.MAIN_DISPLAY, "backend_unavailable")

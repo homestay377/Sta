@@ -1,5 +1,6 @@
 package io.github.mangi.eta.agent.runtime
 
+import io.github.mangi.eta.core.ModuleConfig
 import android.os.SystemClock
 import io.github.mangi.eta.agent.accessibility.AgentAccessibilityService
 import io.github.mangi.eta.agent.accessibility.PackageWindowVisibility
@@ -132,7 +133,7 @@ internal class EntrySurfaceGuard private constructor(
             return EntrySurfaceGuard(packageName, logger, ownedSurfaceDismissal)
         }
 
-        private const val ETA_PACKAGE_NAME = "io.github.mangi.eta"
+        private val ETA_PACKAGE_NAME: String = ModuleConfig.ETA_PACKAGE
         private const val NANOS_PER_MILLISECOND = 1_000_000L
     }
 }

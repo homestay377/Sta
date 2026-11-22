@@ -99,7 +99,6 @@ internal object AgentRuntimeWire {
     /** service -> client：返回 steering 是否已被当前活跃 run 接纳及分配的补充序号。 */
     const val MSG_STEER_RESPONSE = 19
 
-    private const val MODULE_PACKAGE = "io.github.mangi.eta"
     private const val SERVICE_CLASS = "io.github.mangi.eta.agent.runtime.AgentRuntimeService"
 
     private const val KEY_TYPE = "type"
@@ -280,8 +279,12 @@ internal object AgentRuntimeWire {
         val createdAt: Long
     )
 
-    fun serviceIntent(): Intent =
-        Intent(ACTION_BIND).setComponent(ComponentName(MODULE_PACKAGE, SERVICE_CLASS))
+    /**
+     * 用 context.packageName 而不是写死包名：改 applicationId 后仍能绑到自己。
+     * 写死会在另一个 Eta 已安装时绑到对方进程，对方按 UID 丢弃消息，表现为一直「正在执行」。
+     */
+    fun serviceIntent(context: android.content.Context): Intent =
+        Intent(ACTION_BIND).setComponent(ComponentName(context.packageName, SERVICE_CLASS))
 
     private val json = Json {
         ignoreUnknownKeys = true

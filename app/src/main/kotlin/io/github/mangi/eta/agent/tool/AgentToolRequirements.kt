@@ -44,6 +44,9 @@ internal object AgentToolRequirements {
             "skills_list", "skills_read", "skills_read_resource", "skills_list_curated",
             "skills_inspect_github", "skills_install_from_github",
             "generate_image",
+            "stock_chart_read", "stock_chart_annotate", "stock_levels", "analyze_chan",
+            "get_fundamental", "compare_fundamental", "market_overview",
+            "scan_watchlist", "save_decision", "record_trade", "review_trades",
         )
         register(
             RootRequirement.PARTIAL,

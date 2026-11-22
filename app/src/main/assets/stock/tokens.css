@@ -1,0 +1,123 @@
+/* =========================================================
+ * tokens.css — 设计令牌（v10.27）
+ *
+ * 为什么单独一个文件：
+ *   原来 style.css 里 font-size 出现 215 次、12 种取值（10~17px 手调），
+ *   没有层级也没有全局缩放能力 —— 这就是"字号不可调"的根本原因。
+ *   这里把类型阶 / 间距 / 圆角 / 阴影 / 动效收敛成令牌，
+ *   style.css 只引用变量，换皮肤、调字号都只改这一张表。
+ *
+ * 字号缩放：
+ *   <html data-fs="s|m|l|xl"> → --fs-scale 变化 → 所有字号按比例缩放。
+ *   默认 m（1.0），视觉与旧版一致；其余档位只放大/缩小，不改布局结构。
+ * ========================================================= */
+
+:root {
+  /* ---------- 字号阶（1.15 比例） ---------- */
+  --fs-scale: 1;
+  --fs-2xs: calc(10px * var(--fs-scale));   /* 角标、K 线读数 */
+  --fs-xs: calc(11px * var(--fs-scale));    /* 辅助说明 */
+  --fs-sm: calc(12px * var(--fs-scale));    /* 次要正文 */
+  --fs-md: calc(13px * var(--fs-scale));    /* 正文（默认密度） */
+  --fs-base: calc(14px * var(--fs-scale));  /* 主要正文 */
+  --fs-lg: calc(15px * var(--fs-scale));    /* 小标题 */
+  --fs-xl: calc(17px * var(--fs-scale));    /* 页面标题 */
+  --fs-2xl: calc(20px * var(--fs-scale));   /* 大数字 */
+
+  /* 行高：字号放大后行高跟着走，避免文字挤在一起 */
+  --lh-tight: 1.25;
+  --lh-base: 1.5;
+
+  /* ---------- 间距阶（4 的倍数） ---------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* ---------- 圆角（不复用 style.css 的 --r/--r-sm，避免被覆盖） ---------- */
+  --rad-sm: 10px;
+  --rad-md: 12px;
+  --rad-lg: 16px;
+  --rad-xl: 20px;
+  --rad-pill: 999px;
+
+  /* ---------- 阴影（靠圆角+间距分层，不靠描边） ---------- */
+  --sh-1: 0 2px 8px rgba(0, 0, 0, .18);
+  --sh-2: 0 8px 24px rgba(0, 0, 0, .30);
+  --sh-3: 0 16px 40px rgba(0, 0, 0, .40);
+
+  /* ---------- 动效 ---------- */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --t-fast: 120ms;
+  --t-base: 180ms;
+}
+
+/* ---------- 字号档位 ---------- */
+html[data-fs="s"] { --fs-scale: .92; }
+html[data-fs="m"] { --fs-scale: 1; }
+html[data-fs="l"] { --fs-scale: 1.08; }
+html[data-fs="xl"] { --fs-scale: 1.16; }
+
+/* =========================================================
+ * Eta 设置页精确令牌（取自 Eta + COUI 0.0.1-alpha11 源码）
+ * 换算：设计宽度 360dp ↔ 360 CSS px，1dp = 1px
+ * ========================================================= */
+:root {
+  /* 页面 / 卡片 */
+  --eta-page: #000000;                    /* 深色页面（Eta 深色即纯黑） */
+  --eta-card: rgba(255, 255, 255, .10);   /* 深色卡片 = 0x1AFFFFFF */
+  --eta-title: rgba(255, 255, 255, .90);  /* 行标题 */
+  --eta-summary: rgba(255, 255, 255, .54);/* 副标题 / 分组标题 / 右侧值 */
+  --eta-disabled: rgba(255, 255, 255, .30);
+  --eta-divider: rgba(255, 255, 255, .20);
+  --eta-accent: #1A8CFF;                  /* 深色强调色 */
+  --eta-switch-off: rgba(255, 255, 255, .25);
+
+  /* 图标色（Eta SettingsIconColors） */
+  --ico-blue: #4285F4;
+  --ico-green: #34A853;
+  --ico-orange: #FA7B17;
+  --ico-yellow: #F9AB00;
+
+  /* 尺寸（CouiPageDefaults） */
+  --eta-margin: 16px;        /* horizontalMargin */
+  --eta-row-h: 48px;         /* rowMinHeight */
+  --eta-row-pad-x: 16px;
+  --eta-row-pad-y: 10px;
+  --eta-icon: 24px;
+  --eta-icon-gap: 16px;
+  --eta-sum-gap: 2px;
+  --eta-group-top: 12px;     /* categoryTopSpacing（有标题） */
+  --eta-group-top-bare: 16px;
+  --eta-title-pad-x: 32px;   /* 分组标题左右 32 */
+  --eta-title-pad-y: 8px;
+  --eta-radius: 24px;
+  --eta-divider-indent: 56px; /* 16+24+16 */
+  --eta-toolbar: 52px;
+
+  /* 字号（CouiTextKind；1dp=1px） */
+  --eta-fs-home: 40px;  --eta-lh-home: 1;
+  --eta-fs-bar: 18px;
+  --eta-fs-group: 12px; --eta-lh-group: 1.143;
+  --eta-fs-item: 16px;  --eta-lh-item: 1.158;
+  --eta-fs-sum: 13px;   --eta-lh-sum: 1.174;
+  --eta-fs-value: 14px; --eta-lh-value: 1.225;
+}
+
+[data-theme="light"] {
+  --eta-page: #F0F1F2;
+  --eta-card: #FFFFFF;
+  --eta-title: rgba(0, 0, 0, .90);
+  --eta-summary: rgba(0, 0, 0, .54);
+  --eta-disabled: rgba(0, 0, 0, .30);
+  --eta-divider: rgba(0, 0, 0, .12);
+  --eta-accent: #0080FF;
+  --eta-switch-off: rgba(0, 0, 0, .16);
+}
+
+:root {
+  --eta-fs-back: 26px;   /* 返回箭头字形 */
+  --eta-fs-h1: 34px;     /* 设置页大标题（LargeTopAppBar 展开态） */
+}

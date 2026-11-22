@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark" data-fs="m">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>股问AI · 个股分析助手</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="style.css">
+<script>window.__CHART_ONLY = /[?&]mode=chart/.test(location.search);</script>
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <button id="btnDrawer" class="iconbtn brand-menu" title="自选、会话与设置"><span data-icon="menu" aria-hidden="true">☰</span></button>
+    <div class="app-brand"><span class="brand-mark">股问<span>AI</span></span><span class="brand-note">个股分析助手</span></div>
+    <div class="searchbox">
+      <span class="search-icon" data-icon="search" aria-hidden="true"></span>
+      <input id="searchInput" type="text" placeholder="搜索股票" aria-label="搜索股票名称、代码或拼音" autocomplete="off" autocorrect="off" spellcheck="false">
+      <div id="suggest" class="suggest hidden"></div>
+    </div>
+  </header>
+
+  <section class="quote-card" aria-label="当前股票行情">
+    <header class="quotebar">
+      <div class="q-line">
+        <div class="q-identity"><span id="qName" class="q-name">--</span><span id="qCode" class="q-code"></span></div>
+        <div class="q-change-block"><span id="qPrice" class="q-price">--</span><span id="qChg" class="q-chg">--</span></div>
+        <button id="btnGroup" class="iconbtn group-btn" title="管理当前股票的自选分组" aria-label="自选分组"><span data-icon="plus" aria-hidden="true">＋</span></button>
+        <button id="btnSearch" class="iconbtn search-btn" title="搜索股票" aria-label="搜索股票"><span data-icon="search" aria-hidden="true"></span></button>
+        <div class="q-ohv"><span>今开 <b id="qOpen">--</b></span><span>最高 <b id="qHigh">--</b></span><span>最低 <b id="qLow">--</b></span><span>成交量 <b id="qVol">--</b></span></div>
+      </div>
+    </header>
+  </section>
+
+  <nav id="periodBar" class="periodbar" aria-label="K线周期与指标">
+    <div class="period-scroll">
+      <button data-p="minute">分时</button><button data-p="m5">5分</button>
+      <button data-p="m15">15分</button><button data-p="m30">30分</button><button data-p="m60">60分</button>
+      <button data-p="day" class="active">日K</button><button data-p="week">周K</button><button data-p="month">月K</button>
+    </div>
+  </nav>
+
+  <!-- 指标横条：左主图 / 右副图，各自可横向滑动 -->
+  <div id="indBar" class="indbar" aria-label="指标开关">
+    <div id="indMain" class="indbar-scroll" aria-label="主图指标"></div>
+    <div class="indbar-divider" aria-hidden="true"></div>
+    <div id="indSub" class="indbar-scroll" aria-label="副图指标"></div>
+  </div>
+
+  <div id="chartWrap" class="chart-wrap">
+    <canvas id="chart"></canvas>
+    <div id="chartLoading" class="chart-loading hidden"><span class="loading-spinner"></span>正在获取行情…</div>
+    <div id="crosshairInfo" class="crosshair-info hidden"></div>
+    <div id="chanStatus" class="chan-status hidden"></div>
+    <button id="askCandleBtn" class="ask-candle hidden" aria-label="问 Eta 这根 K 线">问 Eta</button>
+    <div class="chart-bottom-tools"><div id="chartCaption" class="chart-caption"></div><div id="chartActions" class="chart-actions"><button class="chart-action" data-chart-action="expand-ai" aria-label="查看分析" title="查看分析"><span data-icon="chat">AI</span></button></div></div>
+  </div>
+
+  <section id="aiSheet" class="ai-sheet" aria-label="AI 个股分析">
+    <div class="sheet-bar" id="sheetBar">
+      <div class="sheet-grip-wrap" id="sheetGrip" aria-label="拖动调整对话区高度"><div class="sheet-grip"></div></div>
+      <div class="sheet-heading"><div class="agent-avatar"><span data-icon="spark">✦</span></div><div><h2 id="sheetTitle">个股分析</h2><p><span class="status-dot"></span>行情 · 指标 · 缠论</p></div></div>
+    </div>
+    <div id="sheetToast" class="sheet-toast hidden"></div>
+    <section id="aiPanel" class="ai-panel"><div id="aiMessages" class="ai-messages"></div></section>
+    <div id="ctxRow" class="ctx-row hidden"><button id="ctxChip" class="ctx-chip"></button><button id="ctxClear" class="ctx-x" title="取消选中">✕</button></div>
+    <!-- 常驻快捷分析：横向滚动，点了直接发（不填输入框） -->
+    <div id="quickRow" class="quick-row" aria-label="快捷分析">
+      <div id="quickChips" class="quick-chips"></div>
+    </div>
+    <div class="ai-composer">
+      <div class="ai-input-row">
+        <button id="btnMore" class="ai-more" title="快捷提问" aria-label="快捷提问"><span data-icon="plus" aria-hidden="true">＋</span></button>
+        <textarea id="aiInput" rows="1" placeholder="问走势、问支撑、问买卖点…" aria-label="输入你的个股问题" autocomplete="off"></textarea>
+        <button id="aiSend" class="ai-send" title="发送；空着发送＝全级别分析" aria-label="发送">➤</button>
+      </div>
+      <div class="composer-note">AI 仅作技术分析参考，不构成投资建议</div>
+    </div>
+  </section>
+</div>
+
+<!-- ============ 抽屉：搜索 / 自选 / 会话 / 入口 ============ -->
+<div id="drawerMask" class="drawer-mask hidden"></div>
+<aside id="drawer" class="drawer">
+  <div class="drawer-head">
+    <div class="drawer-title drawer-brand"><span class="drawer-app-name">股问AI</span><span class="drawer-class">你的个股研究所</span></div>
+    <button id="drClose" class="iconbtn drawer-x" data-icon="close" title="关闭" aria-label="关闭抽屉">✕</button>
+  </div>
+
+  <div class="drawer-body">
+    <div class="dr-sec">
+      <span>自选</span>
+      <button id="btnNewGroup" class="dr-sec-act" data-act="new-group">新建分组</button>
+    </div>
+    <div id="watchPane" class="watch-pane"></div>
+
+    <div class="dr-sec"><span>主题</span></div>
+    <div id="themeChoices" class="theme-choices">
+      <button class="theme-choice" data-theme="dark"><i class="sw sw-dark"></i>深色</button>
+      <button class="theme-choice" data-theme="light"><i class="sw sw-light"></i>浅色</button>
+    </div>
+
+    <div class="dr-sec" id="sessSec">
+      <span>会话</span>
+      <button id="drAllSessions" class="dr-sec-act">全部 ▸</button>
+    </div>
+    <div id="drSessions" class="dr-sessions"></div>
+  </div>
+
+  <div class="drawer-foot">
+    <button id="drKnowledge" class="drawer-btn">
+      <span class="drawer-entry"><span data-icon="book">▤</span><span>知识库</span></span>
+      <span id="drKbCount" class="dr-badge">skill 0 · 世界书 0</span>
+    </button>
+    <button id="btnSettings" class="drawer-btn"><span class="drawer-entry"><span data-icon="settings">⚙</span><span>模型与设置</span></span><span data-icon="chevron" class="entry-chevron">›</span></button>
+    <button id="drTheme" class="drawer-btn theme-button"><span class="drawer-entry"><span data-icon="moon">◐</span><span id="drThemeTxt">切换外观</span></span><span data-icon="chevron" class="entry-chevron">›</span></button>
+  </div>
+</aside>
+
+<!-- ============ 二级页：会话 ============ -->
+<section id="pageSessions" class="page hidden">
+  <div class="page-bar">
+    <button class="page-back" data-back="1" title="返回" aria-label="返回"><span data-icon="back">←</span></button>
+    <input id="sessSearch" class="page-search" type="text" placeholder="搜索会话" autocomplete="off">
+  </div>
+  <div id="sessBody" class="page-body"></div>
+</section>
+
+<!-- ============ 二级页：知识库 ============ -->
+<section id="kbModal" class="page hidden">
+  <div class="page-bar">
+    <button class="page-back" data-back="1" title="返回" aria-label="返回"><span data-icon="back">←</span></button>
+    <div class="page-title">知识库<small id="kbHeaderNote">让 AI 在需要时使用你的知识</small></div>
+  </div>
+  <div class="page-tabs">
+    <button class="kb-tab on" data-tab="skill">Skill</button>
+    <button class="kb-tab" data-tab="wb">世界书</button>
+  </div>
+  <div id="kbFlash" class="kb-flash hidden"></div>
+  <div id="kbBody" class="page-body"></div>
+</section>
+
+<!-- ============ 二级页：设置 ============ -->
+<section id="settingsModal" class="page hidden">
+  <div class="set-hero">
+    <button id="cfgCancel" class="set-back" title="返回">‹</button>
+    <div class="set-h1" id="setTitle">设置</div>
+    <button id="cfgSave" class="set-save">保存</button>
+  </div>
+
+  <div class="page-body">
+
+    <!-- ===== 一级：分组入口（照 Eta 的设置结构：图标 + 名称 + 当前值 + ›）===== -->
+    <div id="setRoot" class="set-root">
+      <div class="set-sec">
+        <div class="set-sec-t">LLM 提供商</div>
+        <div class="set-card">
+          <button class="set-item set-row" type="button" data-view="model">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10a4 4 0 0 0 .7-7.9A5.2 5.2 0 0 0 8 8.4 4.3 4.3 0 0 0 7 18Z"/></svg></span>
+            <span class="set-txt"><b>模型提供商</b><i id="setVModel">未配置</i></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4a3 3 0 0 0-3 3v1a3 3 0 0 0 0 6v2a3 3 0 0 0 5 2.2V4.8A3 3 0 0 0 9 4Z"/><path d="M15 4a3 3 0 0 1 3 3v1a3 3 0 0 1 0 6v2a3 3 0 0 1-5 2.2V4.8A3 3 0 0 1 15 4Z"/></svg></span>
+            <span class="set-txt"><b>默认启用思考</b></span>
+            <button class="switch" id="swChan" type="button" role="switch" aria-checked="false"><span></span></button>
+          </button>
+          <button class="set-item" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.9L19 9.7l-5.2 1.8L12 16.4l-1.8-4.9L5 9.7l5.2-1.8L12 3Z"/></svg></span>
+            <span class="set-txt"><b>默认思考深度</b></span>
+            <span class="set-val">默认</span>
+          </button>
+        </div>
+      </div>
+      <div class="set-sec">
+        <div class="set-sec-t">上下文与扩展</div>
+        <div class="set-card">
+          <button class="set-item" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></svg></span>
+            <span class="set-txt"><b>自动压缩上下文</b></span>
+            <button class="switch" type="button" role="switch" aria-checked="false"><span></span></button>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.9L19 9.7l-5.2 1.8L12 16.4l-1.8-4.9L5 9.7l5.2-1.8L12 3Z"/></svg></span>
+            <span class="set-txt"><b>自动生成对话标题</b></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h6v18H6a2 2 0 0 1-2-2V5Z"/><path d="M12 7h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-6"/></svg></span>
+            <span class="set-txt"><b>记忆</b></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6" r="2.5"/><circle cx="6" cy="17" r="2.5"/><circle cx="18" cy="17" r="2.5"/><path d="M12 8.5V13m0 0-4.3 2.6M12 13l4.3 2.6"/></svg></span>
+            <span class="set-txt"><b>Subagent</b></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item set-row" type="button" data-view="kb">
+            <span class="set-ico ico-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h6v18H6a2 2 0 0 1-2-2V5Z"/><path d="M12 7h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-6"/></svg></span>
+            <span class="set-txt"><b>Skills</b><i id="setVKb">Skill · 世界书</i></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="9" r="2.2"/><path d="M6 7.2v9.6M8.2 5h7.6M18 11.2c0 4.3-5 3.6-9.5 5.3"/></svg></span>
+            <span class="set-txt"><b>MCP 服务器</b></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="3"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/></svg></span>
+            <span class="set-txt"><b>角色</b></span>
+            <span class="set-chev"></span>
+          </button>
+        </div>
+      </div>
+      <div class="set-sec">
+        <div class="set-sec-t">工具</div>
+        <div class="set-card">
+          <button class="set-item set-row" type="button" data-view="tools">
+            <span class="set-ico ico-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/></svg></span>
+            <span class="set-txt"><b>工具列表</b></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18"/></svg></span>
+            <span class="set-txt"><b>网页工具</b></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 20h8M12 17v3"/></svg></span>
+            <span class="set-txt"><b>后台虚拟屏执行</b></span>
+            <button class="switch" type="button" role="switch" aria-checked="false"><span></span></button>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></span>
+            <span class="set-txt"><b>Linux 工具环境</b></span>
+            <span class="set-chev"></span>
+          </button>
+        </div>
+      </div>
+      <div class="set-sec">
+        <div class="set-card">
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 5-3.4 7.6-7 9-3.6-1.4-7-4-7-9V6l7-3Z"/></svg></span>
+            <span class="set-txt"><b>能力增强</b></span>
+            <span class="set-chev"></span>
+          </button>
+        </div>
+      </div>
+      <div class="set-sec">
+        <div class="set-sec-t">系统助手接管</div>
+        <div class="set-card">
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="3"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/></svg></span>
+            <span class="set-txt"><b>数字助理应用</b></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10H9l-5 4V6Z"/></svg></span>
+            <span class="set-txt"><b>全局浮窗助手</b></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button">
+            <span class="set-ico ico-yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v8"/><path d="M7 6a8 8 0 1 0 10 0"/></svg></span>
+            <span class="set-txt"><b>电源键长按</b></span>
+            <span class="set-val">未设置</span>
+          </button>
+          <button class="set-item" type="button">
+            <span class="set-ico ico-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 5-3.4 7.6-7 9-3.6-1.4-7-4-7-9V6l7-3Z"/></svg></span>
+            <span class="set-txt"><b>自动设置默认助理</b></span>
+            <button class="switch" type="button" role="switch" aria-checked="false"><span></span></button>
+          </button>
+        </div>
+      </div>
+      <div class="set-sec">
+        <div class="set-sec-t">通用</div>
+        <div class="set-card">
+          <button class="set-item" type="button">
+            <span class="set-ico ico-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 20h8M12 17v3"/></svg></span>
+            <span class="set-txt"><b>运行期间保持屏幕常亮</b></span>
+            <button class="switch" type="button" role="switch" aria-checked="false"><span></span></button>
+          </button>
+          <button class="set-item set-row" type="button" data-view="appearance">
+            <span class="set-ico ico-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.7 0 2-1.3 1.2-2.2-.9-1 0-2.3 1.3-2.3H17a4 4 0 0 0 4-4c0-5.2-4-9.5-9-9.5Z"/></svg></span>
+            <span class="set-txt"><b>外观与主题</b><i id="setVAppearance">深色 · 标准字号</i></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+            <span class="set-txt"><b>语音</b></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18"/></svg></span>
+            <span class="set-txt"><b>语言</b></span>
+            <span class="set-val">简体中文</span>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 15h18M7 18h.01"/></svg></span>
+            <span class="set-txt"><b>数据备份</b><i id="setVData">本地会话 · 导出</i></span>
+            <span class="set-chev"></span>
+          </button>
+        </div>
+      </div>
+      <div class="set-sec">
+        <div class="set-sec-t">权限</div>
+        <div class="set-card">
+          <button class="set-item" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></svg></span>
+            <span class="set-txt"><b>悬浮窗权限</b></span>
+            <span class="set-val">未授权</span>
+          </button>
+          <button class="set-item" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 5-3.4 7.6-7 9-3.6-1.4-7-4-7-9V6l7-3Z"/></svg></span>
+            <span class="set-txt"><b>无障碍增强工具</b></span>
+            <span class="set-val">已启用</span>
+          </button>
+          <button class="set-item" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 5-3.4 7.6-7 9-3.6-1.4-7-4-7-9V6l7-3Z"/></svg></span>
+            <span class="set-txt"><b>强制保持无障碍</b></span>
+            <button class="switch" type="button" role="switch" aria-checked="false"><span></span></button>
+          </button>
+        </div>
+      </div>
+      <div class="set-sec">
+        <div class="set-sec-t">关于</div>
+        <div class="set-card">
+          <button class="set-item" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span>
+            <span class="set-txt"><b>版本</b></span>
+            <span class="set-val" id="setVAbout">v10.33</span>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg></span>
+            <span class="set-txt"><b>检查更新</b></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7h8v6a4 4 0 0 1-8 0V7Z"/><path d="M8 10H5m11 0h3M8 14l-2 2m10-2 2 2M12 17v3"/></svg></span>
+            <span class="set-txt"><b>问题反馈</b></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" type="button" data-stub="1">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m8 8-4 4 4 4M16 8l4 4-4 4"/></svg></span>
+            <span class="set-txt"><b>源代码</b></span>
+            <span class="set-chev"></span>
+          </button>
+        </div>
+      </div>
+      <div class="set-sec">
+        <div class="set-card">
+          <button class="set-item set-row" type="button" data-view="analysis">
+            <span class="set-ico ico-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m4 20 4.5-1 9.7-9.7a2.6 2.6 0 0 0 0-3.7l-.8-.8a2.6 2.6 0 0 0-3.7 0L4.9 14.6 4 20Z"/></svg></span>
+            <span class="set-txt"><b>分析与快捷提问</b><i id="setVAnalysis">快捷条 · 提问模板</i></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item set-row" type="button" data-view="data">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 15h18"/></svg></span>
+            <span class="set-txt"><b>数据与会话</b><i id="setVData2">本地会话 · 导出</i></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item set-row" type="button" data-view="about">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span>
+            <span class="set-txt"><b>关于</b><i id="setVAbout2">v10.33</i></span>
+            <span class="set-chev"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 二级：外观与主题 ===== -->
+    <div id="setAppearance" class="set-view hidden">
+
+      <div class="set-sec">
+        <div class="set-sec-t">颜色与主题</div>
+        <div class="set-card">
+          <button class="set-item" id="rowUiStyle" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none" opacity=".25"/></svg></span>
+            <span class="set-txt"><b>界面样式</b></span>
+            <span class="set-val" id="valUiStyle">COUI</span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" id="rowThemeMode" type="button">
+            <span class="set-ico ico-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none" opacity=".25"/></svg></span>
+            <span class="set-txt"><b>主题模式</b></span>
+            <span class="set-val" id="valThemeMode">跟随系统</span>
+            <span class="set-chev"></span>
+          </button>
+          <div id="themeRow" class="theme-row hidden">
+            <button class="theme-opt" data-opt="dark">深色</button>
+            <button class="theme-opt" data-opt="light">浅色</button>
+            <button class="theme-opt" data-opt="auto">跟随系统</button>
+          </div>
+          <button class="set-item" id="rowFontSize" type="button">
+            <span class="set-ico ico-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18 9 6l5 12M6.2 14h5.6"/><path d="M17 9v9"/></svg></span>
+            <span class="set-txt"><b>字号</b></span>
+            <span class="set-val" id="valFontSize">标准</span>
+            <span class="set-chev"></span>
+          </button>
+          <div id="fsRow" class="theme-row hidden">
+            <button class="theme-opt" type="button" data-fs="s">小</button>
+            <button class="theme-opt" type="button" data-fs="m">标准</button>
+            <button class="theme-opt" type="button" data-fs="l">大</button>
+            <button class="theme-opt" type="button" data-fs="xl">超大</button>
+          </div>
+          <div class="fs-preview" id="fsPreview">
+            示例：贵州茅台 <span class="fp-up">+2.31%</span> · 中枢 ZG 1586.00 / ZD 1548.20<br>
+            <span class="fp-dim">这段文字会跟着上面的档位一起变。</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-sec">
+        <div class="set-sec-t">界面与效果</div>
+        <div class="set-card">
+          <div class="set-item">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6 4 12l5 6"/><path d="M14 6h6M14 12h6M14 18h6"/></svg></span>
+            <span class="set-txt"><b>横移返回手势</b><i>在屏幕左缘向右滑动返回上一页</i></span>
+            <button class="switch on" id="swSwipe" type="button" role="switch" aria-checked="true"><span></span></button>
+          </div>
+          <div class="set-item">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12h11"/><path d="m11 7 5 5-5 5"/><path d="M20 5v14"/></svg></span>
+            <span class="set-txt"><b>预测性返回手势</b><i>由系统决定，Android 13+ 部分设备生效</i></span>
+            <button class="switch on" id="swPredict" type="button" role="switch" aria-checked="true"><span></span></button>
+          </div>
+          <div class="set-item zoom-item">
+            <span class="set-ico ico-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M9 11h4M11 9v4"/></svg></span>
+            <span class="set-txt"><b>界面缩放</b><i>整体等比缩放，只影响显示不影响数据</i></span>
+            <span class="set-val" id="valUiScale">100%</span>
+          </div>
+          <div class="zoom-row">
+            <input id="uiScale" type="range" min="80" max="110" step="5" value="100">
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===== 二级：模型与提供商 ===== -->
+    <div id="setModel" class="set-view hidden">
+
+      <div class="prov-search">
+        <span class="prov-search-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+        <input id="provSearch" type="search" placeholder="搜索提供商" autocomplete="off">
+      </div>
+
+      <div class="set-sec">
+        <div class="set-sec-t">新增提供商</div>
+        <div class="set-card">
+          <button class="set-item" id="btnModelsDev" type="button" disabled>
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18"/></svg></span>
+            <span class="set-txt"><b>从 models.dev 添加</b><i>浏览 models.dev 社区目录并选择模型</i></span>
+            <span class="set-val">即将支持</span>
+          </button>
+          <button class="set-item" id="btnAddProfile" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l7 4v10l-7 4-7-4V7l7-4Z"/><path d="M12 8.5 15.5 10v4L12 15.5 8.5 14v-4L12 8.5Z"/></svg></span>
+            <span class="set-txt"><b>新增 OpenAI-compatible</b><i>支持 ChatGPT、DeepSeek、Kimi、GLM、Qwen 等</i></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" id="btnAddAnthropic" type="button">
+            <span class="set-ico ico-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 18 9 6m0 0 5 12M6.2 14h5.6"/><path d="M17 9v9m0-9 3 3-3 3"/></svg></span>
+            <span class="set-txt"><b>新增 Anthropic</b><i>支持 Anthropic Claude 官方或兼容 API</i></span>
+            <span class="set-chev"></span>
+          </button>
+          <button class="set-item" id="btnAddGemini" type="button">
+            <span class="set-ico ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2L12 3Z"/></svg></span>
+            <span class="set-txt"><b>新增 Gemini</b><i>使用 API Key 连接原生 Interactions API</i></span>
+            <span class="set-chev"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="set-sec">
+        <div class="set-sec-t" id="provCount">已配置提供商</div>
+        <div class="set-card">
+          <div id="profileList" class="profile-list"></div>
+          <button class="set-item" id="btnPresetProfile" type="button">
+            <span class="set-ico ico-yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2L12 3Z"/></svg></span>
+            <span class="set-txt"><b>从预设快速添加</b><i>DeepSeek / Kimi / OpenAI 兼容</i></span>
+            <span class="set-chev"></span>
+          </button>
+          <div id="presetList" class="preset-list hidden"></div>
+        </div>
+      </div>
+
+      <div class="set-sec">
+        <div class="set-sec-t">连接配置</div>
+        <div class="set-card profile-editor" id="profileEditor">
+          <button class="set-item" id="profileEditorHead" type="button">
+            <span class="set-txt"><b id="peTitle">新建提供商</b><i id="peSub">点上方任一提供商开始编辑</i></span>
+            <span class="set-chev" id="peChev"></span>
+          </button>
+
+          <div id="profileEditorBody" class="pe-body">
+            <label class="field-block">
+              <span class="fb-label">名称</span>
+              <input id="cfgProfileName" type="text" placeholder="名称">
+            </label>
+            <label class="field-block">
+              <span class="fb-label">Base URL</span>
+              <input id="cfgBase" type="text" placeholder="Base URL" inputmode="url">
+            </label>
+            <label class="field-block">
+              <span class="fb-label">API Key</span>
+              <span class="key-row">
+                <input id="cfgKey" type="password" placeholder="API Key" autocomplete="off">
+                <button id="btnEye" class="eye-btn" type="button" title="显示/隐藏"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.6"/></svg></button>
+              </span>
+            </label>
+            <label class="field-block">
+              <span class="fb-label">Endpoint 模式</span>
+              <select id="cfgEndpoint" class="fb-select">
+                <option value="chat">Chat Completions API</option>
+                <option value="anthropic">Anthropic Messages</option>
+                <option value="gemini">Gemini Interactions API</option>
+              </select>
+            </label>
+
+            <button class="set-item sub-row" id="btnTestProfile" type="button">
+              <span class="set-txt"><b>测试连接</b></span>
+              <span class="set-chev"></span>
+            </button>
+
+            <div id="peTip" class="model-tip hidden"></div>
+
+            <div class="field-block field-adv">
+              <span class="fb-label">模型</span>
+              <span class="key-row">
+                <input id="cfgModel" type="text" placeholder="点「获取」选择，或手动输入模型名">
+                <button id="btnFetchModels" class="mini-btn" type="button">获取</button>
+              </span>
+            </div>
+            <div id="modelList" class="model-list hidden"></div>
+            <div id="modelTip" class="model-tip hidden"></div>
+
+            <label class="field-block">
+              <span class="fb-label">系统提示词</span>
+              <textarea id="cfgSystemPrompt" rows="4" placeholder="你可以在这里告诉 AI 如何与你交流、需要遵循哪些要求，也可以留空。"></textarea>
+            </label>
+
+            <div class="field-block">
+              <span class="fb-label">自定义请求头</span>
+              <textarea id="cfgHeaders" rows="2" placeholder="每行一个：名称: 值（留空则不发送）"></textarea>
+            </div>
+
+            <div class="set-adv-toggle">
+              <button id="btnAdvToggle" class="mini-btn" type="button">高级（温度 / 最大 tokens）</button>
+            </div>
+            <div id="advBody" class="hidden">
+              <label class="field-block">
+                <span class="fb-label">温度</span>
+                <input id="cfgTemp" type="number" step="0.1" min="0" max="2" value="0.7">
+              </label>
+              <label class="field-block">
+                <span class="fb-label">最大 tokens</span>
+                <input id="cfgMax" type="number" step="1024" min="512" max="500000" value="65536">
+              </label>
+              <div class="card-note quote tok-note">
+                推理模型的<b>思考过程也占这个配额</b>，给小了会出现「思考没写完就截断」。
+                <span class="tok-row">
+                  <button type="button" class="mini-btn tok" data-tok="8192">8192</button>
+                  <button type="button" class="mini-btn tok" data-tok="32768">32768</button>
+                  <button type="button" class="mini-btn tok" data-tok="65536">65536</button>
+                  <button type="button" class="mini-btn tok" data-tok="131072">131072</button>
+                </span>
+              </div>
+            </div>
+
+            <div class="set-item sub-row">
+              <span class="set-txt"><b>启用此 Provider</b></span>
+              <button class="switch on" id="swProfile" type="button" role="switch" aria-checked="true"><span></span></button>
+            </div>
+
+            <div class="pe-actions">
+              <button id="btnApplyProfile" class="mini-btn pe-apply" type="button">保存并启用</button>
+              <button class="mini-btn danger" id="btnDelProfile" type="button">删除</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="setTools" class="set-view hidden">
+      <div class="set-sec">
+        <div class="set-sec-t">股票分析工具</div>
+        <div class="set-card"><div id="toolList"></div></div>
+      </div>
+    </div>
+
+    <!-- ===== 二级：分析 ===== -->
+    <div id="setAnalysis" class="set-view hidden">
+    <div class="card">
+      <div class="card-title">分析</div>
+      <div class="card-note">快捷提问出现在输入框右侧的「更多」里。点条目只会把文字填进输入框，不会直接发送，可以改完再发。</div>
+      <label class="field">
+        <span>快捷提问（每行一条）</span>
+        <textarea id="cfgPrompts" rows="7" placeholder="每行一个问题…"></textarea>
+      </label>
+      <button id="btnResetPrompts" class="mini-btn" type="button">恢复默认</button>
+    </div>
+
+    </div>
+
+    <!-- ===== 二级：数据 ===== -->
+    <div id="setData" class="set-view hidden">
+    <div class="card">
+      <div class="card-title">数据</div>
+      <div class="card-note" id="dataNote">会话保存在本机，一只股票一份。</div>
+      <div class="btn-row">
+        <button id="btnOpenSessions" class="mini-btn" type="button">管理会话</button>
+        <button id="btnClearSessions" class="mini-btn danger" type="button">清空全部会话</button>
+      </div>
+    </div>
+
+    </div>
+
+    <!-- ===== 二级：关于 ===== -->
+    <div id="setAbout" class="set-view hidden">
+    <div class="card">
+      <div class="card-title">关于</div>
+      <div class="kv"><span>版本</span><b id="aboutVer">v10.0</b></div>
+      <div class="kv"><span>模型</span><b id="aboutModel">--</b></div>
+      <div class="kv"><span>会话</span><b id="aboutSess">--</b></div>
+      <div class="card-note">行情与 K 线来自公开接口，AI 结论由你配置的模型生成。<br>以上均为技术分析，不构成投资建议。</div>
+    </div>
+
+  
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ 统一的底部面板（指标 / ⋯ / 更多 共用） ============ -->
+<div id="actSheet" class="act-sheet hidden">
+  <div class="act-mask"></div>
+  <div class="act-box">
+    <div id="actTitle" class="act-title"></div>
+    <div id="actBody" class="act-body"></div>
+    <button id="actCancel" class="act-cancel">取消</button>
+  </div>
+</div>
+
+<script src="tdx.js"></script>
+<script src="chan.js"></script>
+<script src="chan_formula.js"></script>
+<script src="indicators.js"></script>
+<script src="shapes.js"></script>
+<script src="shape_manager.js"></script>
+<script src="chart.js"></script>
+<script src="app.js"></script>
+<script src="link.js"></script>
+<script src="chart-lite.js"></script>
+<script src="ui.js"></script>
+<script>if(!window.__CHART_ONLY)document.write('<script src="ui_content.js"><\/script>')</script>
+<script>if(!window.__CHART_ONLY)document.write('<script src="tools.js"><\/script>')</script>
+<script>if(!window.__CHART_ONLY)document.write('<script src="agent.js"><\/script>')</script>
+<script>if(!window.__CHART_ONLY)document.write('<script src="skills_seed.js"><\/script>')</script>
+<script>if(!window.__CHART_ONLY)document.write('<script src="worldbook_seed.js"><\/script>')</script>
+<script>if(!window.__CHART_ONLY)document.write('<script src="knowledge.js"><\/script>')</script>
+<script>if(!window.__CHART_ONLY)document.write('<script src="kb_io.js"><\/script>')</script>
+<script>if(!window.__CHART_ONLY)document.write('<script src="kbui.js"><\/script>')</script>
+<script src="groups.js"></script>
+<script>if(!window.__CHART_ONLY)document.write('<script src="session_summary.js"><\/script>')</script>
+<script>if(!window.__CHART_ONLY)document.write('<script src="sessions.js"><\/script>')</script>
+<script src="drawer.js"></script>
+<script>if(!window.__CHART_ONLY)document.write('<script src="pages.js"><\/script>')</script>
+</body>
+</html>
