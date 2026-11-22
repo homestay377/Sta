@@ -49,31 +49,46 @@ jobs:
           echo "Release 包数量: ${#release_apks[@]}"
           echo "Debug 包数量: ${#debug_apks[@]}"
 
-          if [[ ${#release_apks[@]} -eq 0 ]]; then
-            echo "::error::没有生成 Release APK"
+          if [[ ${#release_apks[@]} -ne 1 ]]; then
+            echo "::error::Release APK 数量异常（${#release_apks[@]}）"
             ls -la app/build/outputs/apk/release/ || true
+            exit 1
+          fi
+          if [[ ${#debug_apks[@]} -ne 1 ]]; then
+            echo "::error::Debug APK 数量异常（${#debug_apks[@]}）"
+            ls -la app/build/outputs/apk/debug/ || true
             exit 1
           fi
 
           apksigner_path="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          mkdir -p out
-
-          for apk in "${release_apks[@]}" "${debug_apks[@]}"; do
-            name="$(basename "$apk")"
-            echo "=== $name ==="
+          for apk in "${release_apks[0]}" "${debug_apks[0]}"; do
+            echo "=== $(basename "$apk") ==="
             ls -la "$apk"
             md5sum "$apk"
             sha256sum "$apk"
             "$apksigner_path" verify --min-sdk-version 34 "$apk" \
               && echo "  ^ 签名校验通过"
-            cp "$apk" out/
           done
 
-      - name: 上传 APK
+          echo "release=${release_apks[0]}" >> "$GITHUB_OUTPUT"
+          echo "debug=${debug_apks[0]}" >> "$GITHUB_OUTPUT"
+
+      # archive:false 时一次只能传一个文件，所以两个包分两步上传，
+      # 这样在 Artifact 列表里能看到两个可单独下载的 APK。
+      - name: 上传 Release APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: sta-apks-${{ github.sha }}
-          path: out/*.apk
+          name: Sta-release-${{ github.sha }}
+          path: ${{ steps.apk.outputs.release }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: 上传 Debug APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: Sta-debug-${{ github.sha }}
+          path: ${{ steps.apk.outputs.debug }}
           archive: false
           if-no-files-found: error
           retention-days: 14
