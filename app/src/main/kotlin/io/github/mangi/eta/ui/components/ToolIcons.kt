@@ -57,6 +57,13 @@ import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.TravelExplore
 import androidx.compose.material.icons.rounded.WebAsset
 import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.material.icons.rounded.CandlestickChart
+import androidx.compose.material.icons.rounded.StackedLineChart
+import androidx.compose.material.icons.rounded.Assessment
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.QueryStats
+import androidx.compose.material.icons.rounded.BookmarkAdded
+import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.ui.graphics.vector.ImageVector
 
 internal fun iconForTool(toolId: String): ImageVector = when (toolId) {
@@ -133,6 +140,14 @@ internal fun iconForTool(toolId: String): ImageVector = when (toolId) {
     "read_file", "stat_file" -> Icons.Rounded.Description
     "write_file", "edit_file" -> Icons.Rounded.EditNote
     "list_directory", "glob_files", "grep_files" -> Icons.Rounded.FolderOpen
+    // Sta：股票工具组，各自给一个有辨识度的图标，避免全落到默认 Build
+    "stock_chart_read", "stock_chart_annotate" -> Icons.Rounded.CandlestickChart
+    "analyze_chan", "stock_levels" -> Icons.Rounded.StackedLineChart
+    "get_fundamental", "compare_fundamental" -> Icons.Rounded.Assessment
+    "market_overview" -> Icons.Rounded.Public
+    "scan_watchlist" -> Icons.Rounded.QueryStats
+    "save_decision" -> Icons.Rounded.BookmarkAdded
+    "record_trade", "review_trades" -> Icons.Rounded.ReceiptLong
     else -> when {
         toolId in io.github.mangi.eta.agent.context.PersonalSearchTools.names -> Icons.Rounded.Insights
         toolId in io.github.mangi.eta.agent.model.AgentPhoneToolCatalog.names -> when {

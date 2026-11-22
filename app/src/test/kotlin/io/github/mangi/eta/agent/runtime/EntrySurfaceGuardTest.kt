@@ -2,6 +2,7 @@ package io.github.mangi.eta.agent.runtime
 
 import io.github.mangi.eta.agent.accessibility.PackageWindowVisibility
 import io.github.mangi.eta.core.AgentLogger
+import io.github.mangi.eta.core.ModuleConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertFalse
@@ -37,11 +38,11 @@ class EntrySurfaceGuardTest {
         )
 
         assertNotNull(guard)
-        assertEquals("io.github.mangi.eta", guard?.targetPackageName)
+        assertEquals(ModuleConfig.ETA_PACKAGE, guard?.targetPackageName)
         assertTrue(guard?.dismissOnce() == true)
         assertTrue(guard?.dismissOnce() == true)
         assertEquals(1, dismissCalls.get())
-        assertEquals(setOf("io.github.mangi.eta"), guard?.consumeScreenshotExcludedPackages())
+        assertEquals(setOf(ModuleConfig.ETA_PACKAGE), guard?.consumeScreenshotExcludedPackages())
     }
 
     @Test

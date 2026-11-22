@@ -117,7 +117,10 @@ jobs:
             exit 1
           fi
 
-          "$apksigner_path" verify "${release_apks[0]}"
+          # --min-sdk-version：本项目 minSdk=34，只要 v2/v3 块签名即可。
+          # 不带这个参数时 apksigner 会要求 v1(JAR) 签名，报 "Missing META-INF/MANIFEST.MF"
+          # —— 这个包本身签名是好的，只是验证口径不对。
+          "$apksigner_path" verify --min-sdk-version 34 "${release_apks[0]}"
 
           # 发版标签必须与 versionName 一致，避免标签与安装包版本错位
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then

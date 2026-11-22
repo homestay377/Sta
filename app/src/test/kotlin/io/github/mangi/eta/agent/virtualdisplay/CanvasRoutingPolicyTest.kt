@@ -38,7 +38,7 @@ class CanvasRoutingPolicyTest {
     @Test
     fun systemUiAndEtaOwnPackageAlwaysStayOnMainDisplay() {
         listOf(
-            "io.github.mangi.eta",
+            io.github.mangi.eta.core.ModuleConfig.ETA_PACKAGE,
             "com.android.systemui",
             "com.miui.home",
             "com.oppo.launcher",
