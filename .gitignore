@@ -24,6 +24,9 @@ output-metadata.json
 *.log
 *.jks
 *.keystore
+# Sta 的固定签名证书要进仓库：CI runner 每次都是新机器，
+# 用自动生成的 debug 证书会导致每次签名不同，已装的包无法覆盖安装。
+!keystore/sta-release.jks
 keystore.properties
 google-services.json
 

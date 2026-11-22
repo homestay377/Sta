@@ -5,16 +5,26 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-val releaseStoreFile = System.getenv("ETA_RELEASE_STORE_FILE")
-val releaseStorePassword = System.getenv("ETA_RELEASE_STORE_PASSWORD")
-val releaseKeyAlias = System.getenv("ETA_RELEASE_KEY_ALIAS")
-val releaseKeyPassword = System.getenv("ETA_RELEASE_KEY_PASSWORD")
-val hasReleaseSigning = listOf(
-    releaseStoreFile,
-    releaseStorePassword,
-    releaseKeyAlias,
-    releaseKeyPassword
-).all { !it.isNullOrBlank() }
+// 签名：优先用环境变量（自己的正式证书），否则回退到仓库内的固定证书。
+//
+// ★ 为什么必须固定：CI runner 每次都是全新机器，Gradle 会自动生成一份新的
+//   debug.keystore，指纹每次都不同 —— 打出来的包签名不一致，装新包时必须先卸载旧包。
+//   仓库里的 keystore/sta-release.jks 让每次构建都用同一个证书。
+val envStoreFile = System.getenv("ETA_RELEASE_STORE_FILE")
+val envStorePassword = System.getenv("ETA_RELEASE_STORE_PASSWORD")
+val envKeyAlias = System.getenv("ETA_RELEASE_KEY_ALIAS")
+val envKeyPassword = System.getenv("ETA_RELEASE_KEY_PASSWORD")
+val hasEnvSigning = listOf(envStoreFile, envStorePassword, envKeyAlias, envKeyPassword)
+    .all { !it.isNullOrBlank() }
+
+val bundledKeystore = rootProject.file("keystore/sta-release.jks")
+val hasBundledSigning = bundledKeystore.exists()
+
+val releaseStoreFile: String? = if (hasEnvSigning) envStoreFile else bundledKeystore.absolutePath
+val releaseStorePassword: String? = if (hasEnvSigning) envStorePassword else "sta2026release"
+val releaseKeyAlias: String? = if (hasEnvSigning) envKeyAlias else "sta"
+val releaseKeyPassword: String? = if (hasEnvSigning) envKeyPassword else "sta2026release"
+val hasReleaseSigning = hasEnvSigning || hasBundledSigning
 
 java {
     toolchain {
@@ -69,6 +79,9 @@ android {
             versionNameSuffix = "-debug" + buildMetadataSuffix
             isMinifyEnabled = false
             isPseudoLocalesEnabled = true
+            // debug 也用固定证书：否则 CI 每次自动生成的 debug.keystore 指纹不同，
+            // debug 与 release 两种包互相覆盖都会失败。
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
         release {
             versionNameSuffix = buildMetadataSuffix
