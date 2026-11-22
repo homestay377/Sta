@@ -43,8 +43,8 @@ android {
         minSdk = 34
         targetSdk = 37
         // versionCode 规则：yyyyMMdd + 两位当日序号（01 起），发版时随 versionName 一起手动递增。
-        versionCode = 2026111302
-        versionName = "3.4.4"
+        versionCode = 2026112201
+        versionName = "1.0.0"
 
         ndk {
             // 同时过滤本地与依赖 AAR 的原生库，确保 APK 仅包含 ARM64。
@@ -146,7 +146,7 @@ androidComponents {
     onVariants { variant ->
         // 文件名只取 versionName：构建类型标记与 CI 构建元数据都由 versionNameSuffix 带出
         variant.outputs.forEach { output ->
-            output.outputFileName.set(output.versionName.map { "Eta-v$it.apk" })
+            output.outputFileName.set(output.versionName.map { "Sta-v$it.apk" })
         }
     }
 }

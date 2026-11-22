@@ -12,12 +12,13 @@ import android.os.Bundle
 internal object AccessibilityProtectionProtocol {
     const val VERSION = 1
 
-    const val ACTION_SET =
-        "io.github.mangi.eta.action.SET_ACCESSIBILITY_PROTECTION"
-    const val ACTION_RECOVER =
-        "io.github.mangi.eta.action.RECOVER_ACCESSIBILITY_SERVICE"
-    const val PERMISSION =
-        "io.github.mangi.eta.permission.CONTROL_ACCESSIBILITY_PROTECTION"
+    // 前缀统一跟 applicationId 走：改包名后权限名必须与 Manifest 里的
+    // ${applicationId}.permission.CONTROL_ACCESSIBILITY_PROTECTION 对齐，否则协议对不上。
+    private val PKG: String = io.github.mangi.eta.BuildConfig.APPLICATION_ID
+
+    val ACTION_SET: String = "$PKG.action.SET_ACCESSIBILITY_PROTECTION"
+    val ACTION_RECOVER: String = "$PKG.action.RECOVER_ACCESSIBILITY_SERVICE"
+    val PERMISSION: String = "$PKG.permission.CONTROL_ACCESSIBILITY_PROTECTION"
     const val RECEIVER_PACKAGE = "android"
 
     const val EXTRA_PROTOCOL_VERSION = "protocol_version"
@@ -30,7 +31,8 @@ internal object AccessibilityProtectionProtocol {
     const val SETTING_NAME = "eta_accessibility_protection_enabled"
     const val DEFAULT_ENABLED = false
 
-    const val HEALTH_AUTHORITY = "io.github.mangi.eta.accessibility.health"
+    /** 跟 Manifest 里的 ${applicationId}.accessibility.health 保持一致，改包名后自动跟随。 */
+    val HEALTH_AUTHORITY: String = io.github.mangi.eta.BuildConfig.APPLICATION_ID + ".accessibility.health"
     const val HEALTH_METHOD = "accessibility_health"
     const val VIRTUAL_DISPLAY_SURFACE_METHOD = "virtual_display_surface"
     const val EXTRA_SURFACE_TOKEN = "surface_token"
