@@ -95,6 +95,29 @@ internal object StockGlobalSource {
     }
 
     /**
+     * 按关键词搜境外品种，给搜索框补 A 股以外的结果。
+     *
+     * smartbox 只认 A 股，用户输「伦敦金」「纳指」什么都搜不到，
+     * 面板也就切不过去。这里在 smartbox 结果前面插上匹配的境外品种。
+     *
+     * 返回 `code~name` 的列表（code 是标准代码，name 是中文显示名）。
+     */
+    fun search(keyword: String): List<Pair<String, String>> {
+        val kw = keyword.trim().lowercase()
+        if (kw.isEmpty()) return emptyList()
+        val hits = LinkedHashMap<String, String>()   // code -> 显示名，去重且保序
+        // 1) 别名命中（含前缀匹配：「伦」也能搜到伦敦金）
+        for ((alias, code) in ALIASES) {
+            if (alias.contains(kw) || kw.contains(alias)) {
+                hits.putIfAbsent(code, displayName(code))
+            }
+        }
+        // 2) 标准代码本身命中（xau / us.ixic / aapl）
+        resolve(keyword)?.let { hits.putIfAbsent(it, displayName(it)) }
+        return hits.entries.map { it.key to it.value }
+    }
+
+    /**
      * 判断一个输入是否属于境外品种，并返回标准代码。
      *
      * 认三种写法：

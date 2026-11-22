@@ -299,10 +299,38 @@ class StockNativeBridge(
     fun search(keyword: String?, cbId: String?) {
         onWorker {
             try {
+                val kw = keyword ?: ""
+                // smartbox 只认 A 股，境外品种（伦敦金 / 纳指 / 美股）它搜不到。
+                // 这里先把境外命中项拼成 smartbox 的 v_hint 格式放在最前面，
+                // 前端 parseSearch 就能直接解析出来，不用改协议。
+                val globalHint = io.github.mangi.eta.ui.stock.StockGlobalSource.search(kw)
+                    .joinToString("^") { (code, name) ->
+                        // smartbox 返回的是「市场~代码~原名」，境外品种没有 A 股市场前缀，
+                        // 统一用 gl 作为伪市场标识，前端按 gl 分支处理。
+                        "gl~" + code + "~" + name + "~" + code
+                    }
+
                 val url = "https://smartbox.gtimg.cn/s3/?v=2&q=" +
-                    URLEncoder.encode(keyword ?: "", "UTF-8") + "&t=all"
+                    URLEncoder.encode(kw, "UTF-8") + "&t=all"
                 val r = httpGet(url, UTF8, "https://gu.qq.com/")
-                if (r.err != null) deliver(cbId, false, r.err) else deliver(cbId, true, r.body)
+
+                val body = if (r.err != null) "" else (r.body ?: "")
+                // 把境外结果插到 v_hint 开头
+                val merged = if (globalHint.isEmpty()) {
+                    body
+                } else if (body.contains("v_hint=\"N\"")) {
+                    body.replace("v_hint=\"N\"", "v_hint=\"$globalHint\"")
+                } else {
+                    body.replace(Regex("v_hint=\"([^\"]*)\"")) { m ->
+                        val existing = m.groupValues[1]
+                        if (existing.isEmpty() || existing == "N") {
+                            "v_hint=\"$globalHint\""
+                        } else {
+                            "v_hint=\"$globalHint^$existing\""
+                        }
+                    }
+                }
+                deliver(cbId, true, merged)
             } catch (t: Throwable) {
                 deliver(cbId, false, t.message ?: t.toString())
             }

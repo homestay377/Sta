@@ -379,6 +379,12 @@
         var f = items[i].split('~');
         if (f.length < 3) continue;
         var mk = f[0], cd = f[1], nm = f[2];
+        // gl = 境外品种（伦敦金 / 纳指 / 美股），原生侧拼进来的伪市场标识。
+        // code 直接用 f[3]（原生已经给了标准代码，如 XAU、us.IXIC），不再拼前缀。
+        if (mk === 'gl') {
+          out.push({ code: (f[3] || cd), name: decodeUnicode(nm), raw: cd, global: true });
+          continue;
+        }
         if (mk !== 'sh' && mk !== 'sz' && mk !== 'bj') continue;
         out.push({ code: mk + cd, name: decodeUnicode(nm), raw: cd });
       }
